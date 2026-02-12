@@ -1,7 +1,11 @@
 # 💰 Sistema de Controle Financeiro
 
 Sistema automatizado para gerenciar as finanças mensais da casa com modo interativo.
+rode com
 
+```bash
+streamlit run streamlit_app.py
+```
 ## 📁 Arquivos
 
 ### Arquivos Principais

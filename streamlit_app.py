@@ -636,9 +636,9 @@ def main():
             # Aplicar cores por status
             def colorir_linha(row):
                 cores = {
-                    'pago': 'background-color: #C8E6C9',
-                    'aberto': 'background-color: #FFF9C4',
-                    'atrasado': 'background-color: #FFCDD2'
+                    'pago': 'background-color: #81C784; color: #1B5E20; font-weight: 500',
+                    'aberto': 'background-color: #FFD54F; color: #F57F17; font-weight: 500',
+                    'atrasado': 'background-color: #E57373; color: #B71C1C; font-weight: 500'
                 }
                 cor = cores.get(row['Status'], '')
                 return [cor] * len(row)
@@ -1148,9 +1148,9 @@ def main():
                 # Aplicar cores por status
                 def colorir_linha(row):
                     cores = {
-                        'pago': 'background-color: #C8E6C9',
-                        'aberto': 'background-color: #FFF9C4',
-                        'atrasado': 'background-color: #FFCDD2'
+                        'pago': 'background-color: #81C784; color: #1B5E20; font-weight: 500',
+                        'aberto': 'background-color: #FFD54F; color: #F57F17; font-weight: 500',
+                        'atrasado': 'background-color: #E57373; color: #B71C1C; font-weight: 500'
                     }
                     cor = cores.get(row['Status'], '')
                     return [cor] * len(row)
