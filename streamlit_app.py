@@ -118,6 +118,118 @@ def atualizar_valor_conta(nome_conta, novo_valor):
     return False, 0
 
 
+def listar_meses_anteriores():
+    """Lista todos os arquivos de meses anteriores"""
+    import os
+    import glob
+    
+    if not os.path.exists('olds'):
+        return []
+    
+    arquivos = glob.glob('olds/financas_casa *.json')
+    meses = []
+    
+    for arquivo in arquivos:
+        try:
+            with open(arquivo, 'r', encoding='utf-8') as f:
+                dados = json.load(f)
+                metadata = dados.get('metadata', {})
+                mes = metadata.get('mes', '?')
+                ano = metadata.get('ano', '?')
+                nome_arquivo = os.path.basename(arquivo)
+                meses.append({
+                    'arquivo': arquivo,
+                    'nome': nome_arquivo.replace('financas_casa ', '').replace('.json', ''),
+                    'mes': mes,
+                    'ano': ano,
+                    'display': f"{nome_arquivo.replace('financas_casa ', '').replace('.json', '').title()} {ano}"
+                })
+        except:
+            continue
+    
+    # Ordenar por ano e mês
+    meses.sort(key=lambda x: (int(x['ano']), int(x['mes'])), reverse=True)
+    return meses
+
+
+def carregar_mes_anterior(arquivo):
+    """Carrega dados de um mês anterior"""
+    with open(arquivo, 'r', encoding='utf-8') as f:
+        dados = json.load(f)
+    
+    metadata = dados['metadata']
+    df = pd.DataFrame(dados['contas'])
+    
+    if 'status' in df.columns and 'status_code' not in df.columns:
+        df['status_code'] = df['status']
+    elif 'status_code' not in df.columns:
+        df['status_code'] = 'aberto'
+    
+    return metadata, df
+
+
+def adicionar_conta(nome, categoria, vencimento, valor, status, parcela_atual=None, total_parcelas=None):
+    """Adiciona uma nova conta"""
+    with open('financas_casa.json', 'r', encoding='utf-8') as f:
+        dados = json.load(f)
+    
+    nova_conta = {
+        "categoria": categoria,
+        "nome": nome,
+        "vencimento": int(vencimento),
+        "valor": float(valor),
+        "status_code": status
+    }
+    
+    if parcela_atual and total_parcelas:
+        nova_conta['parcela_atual'] = int(parcela_atual)
+        nova_conta['total_parcelas'] = int(total_parcelas)
+    
+    dados['contas'].append(nova_conta)
+    salvar_dados(dados)
+    return True
+
+
+def remover_conta(nome):
+    """Remove uma conta"""
+    with open('financas_casa.json', 'r', encoding='utf-8') as f:
+        dados = json.load(f)
+    
+    dados['contas'] = [c for c in dados['contas'] if c['nome'] != nome]
+    salvar_dados(dados)
+    return True
+
+
+def atualizar_contas_em_lote(df_editado):
+    """Atualiza todas as contas de uma vez a partir do DataFrame editado"""
+    with open('financas_casa.json', 'r', encoding='utf-8') as f:
+        dados = json.load(f)
+    
+    # Reconstruir lista de contas a partir do DataFrame editado
+    novas_contas = []
+    
+    for _, row in df_editado.iterrows():
+        conta = {
+            "categoria": row['categoria'],
+            "nome": row['nome'],
+            "vencimento": int(row['vencimento']),
+            "valor": float(row['valor']),
+            "status_code": row['status_code']
+        }
+        
+        # Adicionar parcelas se existirem
+        if 'parcela_atual' in row and pd.notna(row['parcela_atual']):
+            conta['parcela_atual'] = int(row['parcela_atual'])
+        if 'total_parcelas' in row and pd.notna(row['total_parcelas']):
+            conta['total_parcelas'] = int(row['total_parcelas'])
+        
+        novas_contas.append(conta)
+    
+    dados['contas'] = novas_contas
+    salvar_dados(dados)
+    return True
+
+
 def verificar_mes_atual():
     """Verifica se o mês atual é diferente do mês registrado"""
     with open('financas_casa.json', 'r', encoding='utf-8') as f:
@@ -133,16 +245,27 @@ def verificar_mes_atual():
     return mes_atual != mes_registro or ano_atual != ano_registro
 
 
+def obter_nome_mes(numero_mes):
+    """Retorna o nome do mês em português"""
+    meses = {
+        1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril",
+        5: "maio", 6: "junho", 7: "julho", 8: "agosto",
+        9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro"
+    }
+    return meses.get(int(numero_mes), "desconhecido")
+
+
 def fechar_mes_e_avancar():
     """Fecha o mês atual e cria o próximo com contas resetadas"""
     # Carregar dados atuais
     with open('financas_casa.json', 'r', encoding='utf-8') as f:
         dados_atuais = json.load(f)
     
-    # Fazer backup do mês anterior
-    mes_anterior = dados_atuais['metadata']['mes']
+    # Fazer backup do mês anterior com nome por extenso
+    mes_anterior = int(dados_atuais['metadata']['mes'])
     ano_anterior = dados_atuais['metadata']['ano']
-    backup_filename = f"olds/financas_casa_{mes_anterior}_{ano_anterior}.json"
+    nome_mes = obter_nome_mes(mes_anterior)
+    backup_filename = f"olds/financas_casa {nome_mes}.json"
     
     import os
     os.makedirs('olds', exist_ok=True)
@@ -223,7 +346,7 @@ def main():
     
     menu = st.sidebar.radio(
         "Navegação",
-        ["📊 Dashboard", "📈 Análises", "📋 Tabelas", "🔧 Gerenciar", "📅 Fechar Mês", "📤 Exportar"]
+        ["📊 Dashboard", "📈 Análises", "📋 Tabelas", "🔧 Gerenciar", "📅 Fechar Mês", "� Meses Anteriores", "�📤 Exportar"]
     )
     
     # ==================== DASHBOARD ====================
@@ -538,10 +661,183 @@ def main():
     elif menu == "🔧 Gerenciar":
         st.header("🔧 Gerenciar Contas")
         
-        tab1, tab2, tab3 = st.tabs(["✅ Marcar como Pago", "💵 Atualizar Valor", "🔍 Buscar Conta"])
+        tab1, tab2, tab3, tab4 = st.tabs(["✏️ Editar Tabela", "✅ Marcar como Pago", "💵 Atualizar Valor", "🔍 Buscar Conta"])
         
-        # Tab 1: Marcar como Pago
+        # Tab 1: Editar Tabela Completa
         with tab1:
+            st.subheader("✏️ Edição Avançada de Contas")
+            st.write("Edite diretamente os valores na tabela abaixo. As alterações são salvas ao clicar em 'Salvar Alterações'.")
+            
+            # Preparar DataFrame para edição
+            df_edit = df.copy()
+            
+            # Garantir que todas as colunas necessárias existam
+            if 'parcela_atual' not in df_edit.columns:
+                df_edit['parcela_atual'] = None
+            if 'total_parcelas' not in df_edit.columns:
+                df_edit['total_parcelas'] = None
+            
+            # Ordenar colunas para melhor visualização
+            colunas_ordem = ['nome', 'categoria', 'vencimento', 'valor', 'status_code', 'parcela_atual', 'total_parcelas']
+            colunas_existentes = [c for c in colunas_ordem if c in df_edit.columns]
+            df_edit = df_edit[colunas_existentes]
+            
+            # Configurar editor de dados
+            st.info("💡 Dica: Clique duas vezes em uma célula para editá-la.")
+            
+            df_editado = st.data_editor(
+                df_edit,
+                use_container_width=True,
+                num_rows="dynamic",
+                column_config={
+                    "nome": st.column_config.TextColumn("Nome", required=True, max_chars=100),
+                    "categoria": st.column_config.SelectboxColumn(
+                        "Categoria",
+                        options=["CASA", "V", "M"],
+                        required=True
+                    ),
+                    "vencimento": st.column_config.NumberColumn(
+                        "Vencimento",
+                        min_value=1,
+                        max_value=31,
+                        step=1,
+                        format="%d",
+                        required=True
+                    ),
+                    "valor": st.column_config.NumberColumn(
+                        "Valor (R$)",
+                        min_value=0.0,
+                        step=0.01,
+                        format="R$ %.2f",
+                        required=True
+                    ),
+                    "status_code": st.column_config.SelectboxColumn(
+                        "Status",
+                        options=["pago", "aberto", "atrasado"],
+                        required=True
+                    ),
+                    "parcela_atual": st.column_config.NumberColumn(
+                        "Parcela Atual",
+                        min_value=0,
+                        step=1,
+                        format="%d"
+                    ),
+                    "total_parcelas": st.column_config.NumberColumn(
+                        "Total Parcelas",
+                        min_value=0,
+                        step=1,
+                        format="%d"
+                    ),
+                },
+                hide_index=True,
+                key="editor_contas"
+            )
+            
+            # Botões de ação
+            col1, col2, col3 = st.columns([2, 1, 1])
+            
+            with col1:
+                if st.button("💾 Salvar Alterações", type="primary", use_container_width=True):
+                    try:
+                        atualizar_contas_em_lote(df_editado)
+                        st.success("✅ Todas as alterações foram salvas!")
+                        st.balloons()
+                        import time
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erro ao salvar: {str(e)}")
+            
+            with col2:
+                if st.button("🔄 Recarregar", use_container_width=True):
+                    st.rerun()
+            
+            with col3:
+                st.metric("Total de Contas", len(df_editado))
+            
+            st.markdown("---")
+            
+            # Seção: Adicionar Nova Conta
+            st.subheader("➕ Adicionar Nova Conta")
+            
+            with st.form("form_adicionar_conta", clear_on_submit=True):
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    novo_nome = st.text_input("Nome da Conta*", placeholder="Ex: Cartão de Crédito")
+                    nova_categoria = st.selectbox("Categoria*", ["CASA", "V", "M"])
+                
+                with col2:
+                    novo_vencimento = st.number_input("Vencimento (dia)*", min_value=1, max_value=31, value=10, step=1)
+                    novo_valor = st.number_input("Valor (R$)*", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+                
+                with col3:
+                    novo_status = st.selectbox("Status*", ["aberto", "pago", "atrasado"], index=0)
+                    tem_parcelas = st.checkbox("Tem parcelas?")
+                
+                if tem_parcelas:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        nova_parcela_atual = st.number_input("Parcela Atual", min_value=1, value=1, step=1)
+                    with col2:
+                        nova_total_parcelas = st.number_input("Total de Parcelas", min_value=1, value=1, step=1)
+                else:
+                    nova_parcela_atual = None
+                    nova_total_parcelas = None
+                
+                submitted = st.form_submit_button("➕ Adicionar Conta", type="primary", use_container_width=True)
+                
+                if submitted:
+                    if not novo_nome:
+                        st.error("❌ O nome da conta é obrigatório!")
+                    else:
+                        try:
+                            adicionar_conta(
+                                novo_nome, nova_categoria, novo_vencimento, 
+                                novo_valor, novo_status, nova_parcela_atual, nova_total_parcelas
+                            )
+                            st.success(f"✅ Conta '{novo_nome}' adicionada com sucesso!")
+                            import time
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Erro ao adicionar conta: {str(e)}")
+            
+            st.markdown("---")
+            
+            # Seção: Remover Conta
+            st.subheader("🗑️ Remover Conta")
+            
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                conta_remover = st.selectbox(
+                    "Selecione a conta para remover:",
+                    df['nome'].tolist(),
+                    key="remover_conta"
+                )
+            
+            with col2:
+                st.write("")
+                st.write("")
+                if st.button("🗑️ Remover", type="secondary", use_container_width=True):
+                    if st.session_state.get('confirmar_remocao') == conta_remover:
+                        try:
+                            remover_conta(conta_remover)
+                            st.success(f"✅ Conta '{conta_remover}' removida!")
+                            if 'confirmar_remocao' in st.session_state:
+                                del st.session_state['confirmar_remocao']
+                            import time
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Erro ao remover: {str(e)}")
+                    else:
+                        st.session_state['confirmar_remocao'] = conta_remover
+                        st.warning("⚠️ Clique novamente para confirmar a remoção.")
+        
+        # Tab 2: Marcar como Pago
+        with tab2:
             st.subheader("✅ Marcar Conta como Paga")
             
             contas_nao_pagas = df[df['status_code'] != 'pago']['nome'].tolist()
@@ -572,8 +868,8 @@ def main():
             else:
                 st.info("🎉 Todas as contas já estão pagas!")
         
-        # Tab 2: Atualizar Valor
-        with tab2:
+        # Tab 3: Atualizar Valor
+        with tab3:
             st.subheader("💵 Atualizar Valor de Conta")
             
             conta_atualizar = st.selectbox(
@@ -602,8 +898,8 @@ def main():
                 else:
                     st.error("❌ Erro ao atualizar valor.")
         
-        # Tab 3: Buscar Conta
-        with tab3:
+        # Tab 4: Buscar Conta
+        with tab4:
             st.subheader("🔍 Buscar Conta")
             
             termo_busca = st.text_input("Digite o nome da conta:", key="buscar")
@@ -728,6 +1024,168 @@ def main():
                             st.error(f"❌ Erro ao fechar mês: {str(e)}")
             else:
                 st.button("🔄 Fechar Mês", type="primary", disabled=True, use_container_width=True)
+    
+    # ==================== MESES ANTERIORES ====================
+    elif menu == "📚 Meses Anteriores":
+        st.header("📚 Visualizar Meses Anteriores")
+        
+        meses_anteriores = listar_meses_anteriores()
+        
+        if not meses_anteriores:
+            st.info("📭 Nenhum mês anterior encontrado.")
+            st.write("Os meses fechados aparecerão aqui automaticamente após usar a função 'Fechar Mês'.")
+        else:
+            st.write(f"**{len(meses_anteriores)} mês(es) encontrado(s)**")
+            
+            # Seletor de mês
+            opcoes_meses = [m['display'] for m in meses_anteriores]
+            mes_selecionado_idx = st.selectbox(
+                "Selecione o mês:",
+                range(len(opcoes_meses)),
+                format_func=lambda x: opcoes_meses[x],
+                key="mes_anterior"
+            )
+            
+            mes_dados = meses_anteriores[mes_selecionado_idx]
+            
+            st.markdown("---")
+            
+            # Carregar dados do mês selecionado
+            metadata_ant, df_ant = carregar_mes_anterior(mes_dados['arquivo'])
+            totais_ant = calcular_totais(df_ant)
+            
+            # Header do mês
+            st.subheader(f"📅 {mes_dados['nome'].title()} / {mes_dados['ano']}")
+            
+            # Métricas principais
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("💰 Total do Mês", f"R$ {totais_ant['total_mes']:,.2f}")
+            
+            with col2:
+                percentual_pago = (totais_ant['total_pago']/totais_ant['total_mes']*100) if totais_ant['total_mes'] > 0 else 0
+                st.metric("✅ Total Pago", f"R$ {totais_ant['total_pago']:,.2f}", delta=f"{percentual_pago:.1f}%")
+            
+            with col3:
+                percentual_aberto = (totais_ant['total_a_pagar']/totais_ant['total_mes']*100) if totais_ant['total_mes'] > 0 else 0
+                st.metric("⏰ Total a Pagar", f"R$ {totais_ant['total_a_pagar']:,.2f}", delta=f"{percentual_aberto:.1f}%")
+            
+            st.markdown("---")
+            
+            # Totais por categoria
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("🏠 CASA", f"R$ {totais_ant['total_casa']:,.2f}")
+            
+            with col2:
+                st.metric("👤 V", f"R$ {totais_ant['total_v']:,.2f}")
+            
+            with col3:
+                st.metric("👤 M", f"R$ {totais_ant['total_m']:,.2f}")
+            
+            st.markdown("---")
+            
+            # Tabs com análises
+            tab1, tab2, tab3 = st.tabs(["📋 Todas as Contas", "📊 Gráficos", "📈 Resumo"])
+            
+            with tab1:
+                st.subheader("Todas as Contas")
+                
+                df_display = df_ant.copy()
+                
+                # Adicionar informação de parcelas
+                if 'parcela_atual' in df_display.columns and 'total_parcelas' in df_display.columns:
+                    df_display['parcelas'] = df_display.apply(
+                        lambda x: f"{int(x['parcela_atual'])}/{int(x['total_parcelas'])}" 
+                        if pd.notna(x['parcela_atual']) and pd.notna(x['total_parcelas']) 
+                        else '-', 
+                        axis=1
+                    )
+                else:
+                    df_display['parcelas'] = '-'
+                
+                df_display['valor_fmt'] = df_display['valor'].apply(lambda x: f"R$ {x:,.2f}")
+                
+                colunas_exibir = ['vencimento', 'nome', 'categoria', 'valor_fmt', 'parcelas', 'status_code']
+                df_show = df_display[colunas_exibir].sort_values('vencimento')
+                df_show.columns = ['Venc.', 'Nome', 'Cat.', 'Valor', 'Parcelas', 'Status']
+                
+                # Aplicar cores por status
+                def colorir_linha(row):
+                    cores = {
+                        'pago': 'background-color: #C8E6C9',
+                        'aberto': 'background-color: #FFF9C4',
+                        'atrasado': 'background-color: #FFCDD2'
+                    }
+                    cor = cores.get(row['Status'], '')
+                    return [cor] * len(row)
+                
+                st.dataframe(
+                    df_show.style.apply(colorir_linha, axis=1),
+                    use_container_width=True,
+                    height=500
+                )
+            
+            with tab2:
+                st.subheader("Distribuição")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("#### Por Status")
+                    status_totais = df_ant.groupby('status_code')['valor'].sum()
+                    cores_status = {'pago': '#4CAF50', 'aberto': '#FFC107', 'atrasado': '#F44336'}
+                    cores = [cores_status.get(s, '#9E9E9E') for s in status_totais.index]
+                    
+                    fig, ax = plt.subplots(figsize=(6, 5))
+                    ax.pie(status_totais.values, labels=status_totais.index.str.upper(), 
+                           autopct='%1.1f%%', startangle=90, colors=cores)
+                    st.pyplot(fig)
+                
+                with col2:
+                    st.markdown("#### Por Categoria")
+                    categoria_totais = df_ant.groupby('categoria')['valor'].sum()
+                    cores_cat = {'CASA': '#2196F3', 'V': '#9C27B0', 'M': '#FF9800'}
+                    cores = [cores_cat.get(c, '#9E9E9E') for c in categoria_totais.index]
+                    
+                    fig, ax = plt.subplots(figsize=(6, 5))
+                    ax.pie(categoria_totais.values, labels=categoria_totais.index, 
+                           autopct='%1.1f%%', startangle=90, colors=cores)
+                    st.pyplot(fig)
+            
+            with tab3:
+                st.subheader("Resumo por Categoria e Status")
+                
+                resumo_cat = df_ant.groupby(['categoria', 'status_code'])['valor'].sum().unstack(fill_value=0)
+                resumo_cat['TOTAL'] = resumo_cat.sum(axis=1)
+                resumo_cat.loc['TOTAL'] = resumo_cat.sum()
+                
+                resumo_cat_fmt = resumo_cat.applymap(lambda x: f"R$ {x:,.2f}")
+                
+                st.dataframe(resumo_cat_fmt, use_container_width=True)
+            
+            # Botão de exportar
+            st.markdown("---")
+            col1, col2, col3 = st.columns([1, 1, 2])
+            
+            with col1:
+                if st.button("📥 Exportar CSV", use_container_width=True):
+                    nome_arquivo_csv = f"financas_{mes_dados['nome']}_{mes_dados['ano']}.csv"
+                    df_ant.to_csv(nome_arquivo_csv, index=False, encoding='utf-8')
+                    st.success(f"✅ Exportado: {nome_arquivo_csv}")
+            
+            with col2:
+                # Botão de download
+                csv_data = df_ant.to_csv(index=False, encoding='utf-8')
+                st.download_button(
+                    label="⬇️ Download CSV",
+                    data=csv_data,
+                    file_name=f"financas_{mes_dados['nome']}_{mes_dados['ano']}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
     
     # ==================== EXPORTAR ====================
     elif menu == "📤 Exportar":
