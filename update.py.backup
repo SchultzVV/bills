@@ -1,0 +1,86 @@
+import json
+import csv
+from datetime import datetime
+from maths_month import calcular_resumo_mensal
+
+INPUT_JSON = "financas_casa.json"
+OUTPUT_CSV = "financas_casa.csv"
+
+STATUS_LABELS = {
+    "pago": "PAGO",
+    "aberto": "EM ABERTO",
+    "atrasado": "ATRASADO"
+}
+
+# Mantém compatibilidade com formato antigo
+STATUS_ALIASES = {
+    "paid": "pago",
+    "due": "aberto",
+    "overdue": "atrasado"
+}
+
+def main():
+    with open(INPUT_JSON, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Extrair mês e ano dos metadados
+    mes = int(data["metadata"]["mes"])
+    ano = int(data["metadata"]["ano"])
+    
+    today = datetime.today().date()
+
+    rows = []
+    for conta in data["contas"]:
+        vencimento_raw = conta["vencimento"]
+        
+        # Aceita tanto formato completo (YYYY-MM-DD) quanto só o dia (10 ou "10")
+        if isinstance(vencimento_raw, int) or (isinstance(vencimento_raw, str) and len(vencimento_raw) <= 2):
+            # Se for só o dia, construir data completa
+            dia = int(vencimento_raw)
+            vencimento = datetime(ano, mes, dia).date()
+        else:
+            # Se for data completa, usar como antes
+            vencimento = datetime.strptime(vencimento_raw, "%Y-%m-%d").date()
+        
+        status = conta["status"]
+        
+        # Normaliza status (aceita formato antigo e novo)
+        if status in STATUS_ALIASES:
+            status = STATUS_ALIASES[status]
+
+        # Segurança: recalcula atraso automaticamente
+        if status != "pago" and vencimento < today:
+            status = "atrasado"
+
+        rows.append({
+            "Categoria": conta["categoria"],
+            "Conta": conta["nome"],
+            "Vencimento": vencimento.strftime("%d/%m/%Y"),
+            "Valor": f"{conta['valor']:.2f}",
+            "Status": STATUS_LABELS[status],
+            "Status_Code": status
+        })
+
+    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "Categoria",
+                "Conta",
+                "Vencimento",
+                "Valor",
+                "Status",
+                "Status_Code"
+            ]
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(f"✅ CSV gerado com sucesso: {OUTPUT_CSV}")
+    
+    # Gerar resumo mensal
+    print()
+    calcular_resumo_mensal()
+
+if __name__ == "__main__":
+    main()

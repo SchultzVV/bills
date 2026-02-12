@@ -1,0 +1,176 @@
+{
+  "metadata": {
+    "mes": "12",
+    "ano": "2025",
+    "descricao": "Controle financeiro da casa"
+  },
+  "contas": [
+    {
+      "categoria": "CASA",
+      "nome": "Aluguel",
+      "vencimento": 10,
+      "valor": 1325.0,
+      "status_code": "pago"
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Condominio",
+      "vencimento": 11,
+      "valor": 350.0,
+      "status_code": "pago"
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Luz",
+      "vencimento": 19,
+      "valor": 263.06,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Internet",
+      "vencimento": 10,
+      "valor": 113.55,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Vivo",
+      "vencimento": 10,
+      "valor": 66.8,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Larissel",
+      "vencimento": 15,
+      "valor": 30.0,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Cadmia",
+      "vencimento": 6,
+      "valor": 158.0,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Geladeira",
+      "vencimento": 16,
+      "valor": 868.0,
+      "status_code": "pago"
+    },
+    {
+      "categoria": "V",
+      "nome": "Apocalipse",
+      "vencimento": 16,
+      "valor": 1260.29,
+      "status_code": "pago",
+      "parcela_atual": 12,
+      "total_parcelas": 32
+    },
+    {
+      "categoria": "V",
+      "nome": "PJ",
+      "vencimento": 17,
+      "valor": 3954.0,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "V",
+      "nome": "PF",
+      "vencimento": 16,
+      "valor": 2595.64,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "V",
+      "nome": "99",
+      "vencimento": 20,
+      "valor": 796.21,
+      "status_code": "pago"
+    },
+    {
+      "categoria": "V",
+      "nome": "Contadora",
+      "vencimento": 6,
+      "valor": 300.0,
+      "status_code": "pago"
+    },
+    {
+      "categoria": "V",
+      "nome": "Cheque Especial",
+      "vencimento": 17,
+      "valor": 42.0,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "V",
+      "nome": "Imposto",
+      "vencimento": 17,
+      "valor": 1.0,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "M",
+      "nome": "Mercado Livre",
+      "vencimento": 21,
+      "valor": 628.28,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "M",
+      "nome": "Banrisul",
+      "vencimento": 10,
+      "valor": 389.15,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "M",
+      "nome": "Banco do Brasil",
+      "vencimento": 16,
+      "valor": 0.0,
+      "status_code": "pago"
+    },
+    {
+      "categoria": "M",
+      "nome": "Moto",
+      "vencimento": 19,
+      "valor": 487.18,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "M",
+      "nome": "PicPay",
+      "vencimento": 18,
+      "valor": 0.0,
+      "status_code": "pago"
+    },
+    {
+      "categoria": "M",
+      "nome": "JC",
+      "vencimento": 5,
+      "valor": 327.0,
+      "status_code": "pago",
+      "parcela_atual": 1,
+      "total_parcelas": 7
+    },
+    {
+      "categoria": "M",
+      "nome": "renner",
+      "vencimento": 3,
+      "valor": 382.0,
+      "status_code": "aberto"
+    },
+    {
+      "categoria": "M",
+      "nome": "curso",
+      "vencimento": 10,
+      "valor": 100.0,
+      "status_code": "aberto",
+      "parcela_atual": 1,
+      "total_parcelas": 3
+    }
+  ]
+}

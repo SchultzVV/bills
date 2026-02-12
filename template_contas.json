@@ -1,0 +1,136 @@
+{
+  "info": "Template base das contas fixas. Use reset_month.py para criar um novo mês a partir deste template.",
+  "contas_fixas": [
+    {
+      "categoria": "CASA",
+      "nome": "Aluguel",
+      "vencimento": 10,
+      "valor": 1325.00
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Condominio",
+      "vencimento": 11,
+      "valor": 350.00
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Luz",
+      "vencimento": 13,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Internet",
+      "vencimento": 10,
+      "valor": 113.55
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Vivo",
+      "vencimento": 10,
+      "valor": 66.80
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Larissel",
+      "vencimento": 15,
+      "valor": 30.00
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Cadmia",
+      "vencimento": 6,
+      "valor": 158.00
+    },
+    {
+      "categoria": "CASA",
+      "nome": "Geladeira",
+      "vencimento": 16,
+      "valor": 868.00
+    },
+    {
+      "categoria": "V",
+      "nome": "Apocalipse",
+      "vencimento": 16,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    },
+    {
+      "categoria": "V",
+      "nome": "PJ",
+      "vencimento": 17,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    },
+    {
+      "categoria": "V",
+      "nome": "PF",
+      "vencimento": 16,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    },
+    {
+      "categoria": "V",
+      "nome": "99",
+      "vencimento": 20,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    },
+    {
+      "categoria": "V",
+      "nome": "Contadora",
+      "vencimento": 6,
+      "valor": 300.00
+    },
+    {
+      "categoria": "V",
+      "nome": "Cheque Especial",
+      "vencimento": 17,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    },
+    {
+      "categoria": "V",
+      "nome": "Imposto",
+      "vencimento": 17,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    },
+    {
+      "categoria": "M",
+      "nome": "Mercado Livre",
+      "vencimento": 21,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    },
+    {
+      "categoria": "M",
+      "nome": "Banrisul",
+      "vencimento": 10,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    },
+    {
+      "categoria": "M",
+      "nome": "Banco do Brasil",
+      "vencimento": 16,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    },
+    {
+      "categoria": "M",
+      "nome": "Moto",
+      "vencimento": 19,
+      "valor": 487.18
+    },
+    {
+      "categoria": "M",
+      "nome": "PicPay",
+      "vencimento": 18,
+      "valor": 0.00,
+      "observacao": "Valor varia - atualizar manualmente"
+    }
+  ]
+}
