@@ -442,11 +442,47 @@ def main():
         df_aberto = df[df['status_code'] == 'aberto'].copy()
         
         if len(df_aberto) > 0:
-            df_aberto_display = df_aberto[['nome', 'categoria', 'vencimento', 'valor']].sort_values('vencimento')
-            df_aberto_display['valor'] = df_aberto_display['valor'].apply(lambda x: f"R$ {x:,.2f}")
-            df_aberto_display.columns = ['Nome', 'Categoria', 'Vencimento', 'Valor']
+            # Criar colunas para cada conta com botão de ação
+            for idx, row in df_aberto.sort_values('vencimento').iterrows():
+                col1, col2, col3, col4, col5, col6 = st.columns([2, 1, 1, 1, 1, 1])
+                
+                with col1:
+                    st.write(f"**{row['nome']}**")
+                
+                with col2:
+                    st.write(f"📁 {row['categoria']}")
+                
+                with col3:
+                    st.write(f"📅 Dia {row['vencimento']}")
+                
+                with col4:
+                    st.write(f"💰 R$ {row['valor']:,.2f}")
+                
+                with col5:
+                    if 'parcela_atual' in row and pd.notna(row['parcela_atual']):
+                        st.write(f"📊 {int(row['parcela_atual'])}/{int(row['total_parcelas'])}")
+                    else:
+                        st.write("—")
+                
+                with col6:
+                    btn_key = f"pagar_{row['nome']}_{idx}"
+                    if st.button("✅ Pagar", key=btn_key, use_container_width=True):
+                        if st.session_state.get('confirmar_pagar') == row['nome']:
+                            marcar_como_pago(row['nome'])
+                            st.success(f"✅ '{row['nome']}' marcada como paga!")
+                            if 'confirmar_pagar' in st.session_state:
+                                del st.session_state['confirmar_pagar']
+                            import time
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.session_state['confirmar_pagar'] = row['nome']
+                            st.rerun()
             
-            st.dataframe(df_aberto_display, use_container_width=True, hide_index=True)
+            # Mostrar aviso de confirmação se existir
+            if 'confirmar_pagar' in st.session_state:
+                st.warning(f"⚠️ Clique novamente em '✅ Pagar' da conta '{st.session_state['confirmar_pagar']}' para confirmar.")
+            
             st.info(f"💡 Total em aberto: **R$ {df_aberto['valor'].sum():,.2f}**")
         else:
             st.success("✅ Nenhuma conta em aberto!")
@@ -549,27 +585,24 @@ def main():
                 'nome': 'count'
             }).rename(columns={'nome': 'quantidade'}).reset_index()
             
-            col1, col2 = st.columns(1)
+            st.markdown("#### Valor por Dia de Vencimento")
+            fig, ax = plt.subplots(figsize=(14, 6))
+            ax.bar(vencimentos['dia'], vencimentos['valor'], color='#2196F3', alpha=0.7)
+            ax.set_title('Valor Total por Dia de Vencimento', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Dia do Mês')
+            ax.set_ylabel('Valor (R$)')
+            ax.grid(axis='y', alpha=0.3)
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'R$ {x:,.0f}'))
+            st.pyplot(fig)
             
-            with col1:
-                st.markdown("#### Valor por Dia de Vencimento")
-                fig, ax = plt.subplots(figsize=(14, 6))
-                ax.bar(vencimentos['dia'], vencimentos['valor'], color='#2196F3', alpha=0.7)
-                ax.set_title('Valor Total por Dia de Vencimento', fontsize=14, fontweight='bold')
-                ax.set_xlabel('Dia do Mês')
-                ax.set_ylabel('Valor (R$)')
-                ax.grid(axis='y', alpha=0.3)
-                ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'R$ {x:,.0f}'))
-                st.pyplot(fig)
-                
-                st.markdown("#### Quantidade por Dia de Vencimento")
-                fig, ax = plt.subplots(figsize=(14, 6))
-                ax.bar(vencimentos['dia'], vencimentos['quantidade'], color='#FF9800', alpha=0.7)
-                ax.set_title('Quantidade de Contas por Dia de Vencimento', fontsize=14, fontweight='bold')
-                ax.set_xlabel('Dia do Mês')
-                ax.set_ylabel('Quantidade')
-                ax.grid(axis='y', alpha=0.3)
-                st.pyplot(fig)
+            st.markdown("#### Quantidade por Dia de Vencimento")
+            fig, ax = plt.subplots(figsize=(14, 6))
+            ax.bar(vencimentos['dia'], vencimentos['quantidade'], color='#FF9800', alpha=0.7)
+            ax.set_title('Quantidade de Contas por Dia de Vencimento', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Dia do Mês')
+            ax.set_ylabel('Quantidade')
+            ax.grid(axis='y', alpha=0.3)
+            st.pyplot(fig)
     
     # ==================== TABELAS ====================
     elif menu == "📋 Tabelas":

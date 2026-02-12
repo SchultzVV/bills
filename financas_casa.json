@@ -93,7 +93,7 @@
       "nome": "Contadora",
       "vencimento": 6,
       "valor": 0.0,
-      "status_code": "aberto"
+      "status_code": "pago"
     },
     {
       "categoria": "V",
@@ -123,7 +123,7 @@
       "nome": "Renner",
       "vencimento": 10,
       "valor": 198.0,
-      "status_code": "aberto"
+      "status_code": "pago"
     }
   ]
 }
