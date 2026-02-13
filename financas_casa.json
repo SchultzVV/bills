@@ -38,7 +38,7 @@
       "nome": "Vivo",
       "vencimento": 10,
       "valor": 66.8,
-      "status_code": "aberto"
+      "status_code": "pago"
     },
     {
       "categoria": "CASA",
@@ -61,7 +61,7 @@
       "nome": "Apocalipse",
       "vencimento": 16,
       "valor": 1260.29,
-      "status_code": "aberto",
+      "status_code": "pago",
       "parcela_atual": 11,
       "total_parcelas": 21
     },
@@ -69,15 +69,15 @@
       "categoria": "V",
       "nome": "PJ",
       "vencimento": 18,
-      "valor": 3195.78,
-      "status_code": "aberto"
+      "valor": 1782.0,
+      "status_code": "pago"
     },
     {
       "categoria": "V",
       "nome": "PF",
       "vencimento": 18,
-      "valor": 1985.34,
-      "status_code": "aberto"
+      "valor": 300.0,
+      "status_code": "pago"
     },
     {
       "categoria": "V",
@@ -100,7 +100,7 @@
       "nome": "Cheque Especial",
       "vencimento": 17,
       "valor": 217.0,
-      "status_code": "aberto"
+      "status_code": "pago"
     },
     {
       "categoria": "V",
