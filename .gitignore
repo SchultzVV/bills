@@ -1,0 +1,8 @@
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Artefatos grandes locais (não versionar)
+chulha/data/gold/consolidated_all_data.csv
+chulha/grafiqueira.zip
+chulha/streamlitado.zip

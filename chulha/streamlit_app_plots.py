@@ -43,6 +43,79 @@ def carregar_dados(base_path, chip):
     return loader.carregar_chip(chip)
 
 
+@st.cache_data
+def construir_tabelao(base_path):
+    """Monta um DataFrame consolidado (long/tidy) para todos os chips da pasta selecionada."""
+    loader_local = DataLoader(base_path)
+    chips = loader_local.listar_chips_disponiveis()
+
+    registros = []
+    for chip in chips:
+        dados_chip = loader_local.carregar_chip(chip)
+        for etapa, df_etapa in dados_chip.items():
+            if 'V_G' not in df_etapa.columns:
+                continue
+
+            colunas_devices = [c for c in df_etapa.columns if c != 'V_G']
+            if not colunas_devices:
+                continue
+
+            bloco = df_etapa.melt(
+                id_vars='V_G',
+                value_vars=colunas_devices,
+                var_name='device',
+                value_name='I_DS'
+            ).copy()
+            bloco['chip'] = chip
+            bloco['etapa'] = etapa
+            registros.append(bloco)
+
+    if not registros:
+        return pd.DataFrame(columns=['chip', 'etapa', 'V_G', 'device', 'I_DS'])
+
+    df_exec = pd.concat(registros, ignore_index=True)
+    df_exec['device'] = df_exec['device'].astype(str)
+    df_exec['V_G'] = pd.to_numeric(df_exec['V_G'], errors='coerce')
+    df_exec['I_DS'] = pd.to_numeric(df_exec['I_DS'], errors='coerce')
+    df_exec = df_exec.dropna(subset=['V_G', 'I_DS']).reset_index(drop=True)
+
+    return df_exec
+
+
+def df_para_dados_plot(df_base, chip_sel, etapas_sel=None):
+    """Reconstrói dicionário etapa -> DataFrame no formato esperado pelo PlotterGFET."""
+    df_chip = df_base[df_base['chip'] == chip_sel].copy()
+    if df_chip.empty:
+        return {}
+
+    if etapas_sel is None:
+        etapas_sel = sorted(df_chip['etapa'].unique().tolist())
+
+    dados_plot = {}
+    for etapa in etapas_sel:
+        df_etapa = df_chip[df_chip['etapa'] == etapa]
+        if df_etapa.empty:
+            continue
+
+        pivot = (
+            df_etapa.pivot_table(
+                index='V_G',
+                columns='device',
+                values='I_DS',
+                aggfunc='mean'
+            )
+            .reset_index()
+            .sort_values('V_G')
+            .reset_index(drop=True)
+        )
+        pivot.columns.name = None
+
+        cols_devices = sorted([c for c in pivot.columns if c != 'V_G'], key=lambda x: (len(str(x)), str(x)))
+        dados_plot[etapa] = pivot[['V_G'] + cols_devices]
+
+    return dados_plot
+
+
 # ==================== INTERFACE PRINCIPAL ====================
 
 # Sidebar para configurações
@@ -162,11 +235,12 @@ with st.sidebar.expander("🎯 Ver Devices"):
 plotter = PlotterGFET(chip_name=chip_selecionado)
 
 # Tabs principais
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📈 Curvas de Transferência", 
     "🔄 Curvas Normalizadas",
     "🎯 Device Individual",
-    "💧 Curvas de Concentração"
+    "💧 Curvas de Concentração",
+    "🗃️ Tabelão"
 ])
 
 # ==================== TAB 1: Curvas de Transferência ====================
@@ -212,15 +286,62 @@ with tab1:
             if st.button("🔄 Gerar Gráfico - Curvas de Transferência", key="btn_todas_transferencia"):
                 with st.spinner("Gerando gráfico..."):
                     try:
-                        fig = plotter.plot_curvas_transferencia_grid(
-                            dados, 
-                            etapas=etapas_selecionadas,
-                            figsize=(20, 16)
-                        )
-                        st.pyplot(fig)
-                        plt.close()
+                        devices_limitados = devices_disponiveis[:max_devices]
+                        dados_filtrados = {}
+                        for etapa in etapas_selecionadas:
+                            if etapa in dados:
+                                df = dados[etapa]
+                                colunas = ['V_G'] + [d for d in devices_limitados if d in df.columns]
+                                if len(colunas) > 1:
+                                    dados_filtrados[etapa] = df[colunas]
+                        if not dados_filtrados:
+                            st.warning("⚠️ Nenhum device selecionado disponível nas etapas escolhidas")
+                        else:
+                            fig = plotter.plot_curvas_transferencia_grid(
+                                dados_filtrados, 
+                                etapas=etapas_selecionadas,
+                                figsize=(20, 16)
+                            )
+                            st.pyplot(fig)
+                            plt.close()
                     except Exception as e:
                         st.error(f"Erro ao gerar gráfico: {e}")
+            st.markdown("---")
+            st.markdown("### 🎯 Seleção de Devices Específicos")
+
+            devices_selecionados = st.multiselect(
+                "🧩 Escolha os devices para plotar:",
+                devices_disponiveis,
+                default=devices_disponiveis[:min(4, len(devices_disponiveis))],
+                help="Selecione devices específicos para explorar após a visão geral"
+            )
+
+            if devices_selecionados:
+                if st.button("🔄 Gerar Gráfico - Devices Selecionados", key="btn_devices_selecionados"):
+                    with st.spinner("Gerando gráfico..."):
+                        try:
+                            dados_filtrados = {}
+                            for etapa in etapas_selecionadas:
+                                if etapa in dados:
+                                    df = dados[etapa]
+                                    colunas = ['V_G'] + [d for d in devices_selecionados if d in df.columns]
+                                    if len(colunas) > 1:
+                                        dados_filtrados[etapa] = df[colunas]
+
+                            if not dados_filtrados:
+                                st.warning("⚠️ Nenhum device selecionado disponível nas etapas escolhidas")
+                            else:
+                                fig = plotter.plot_curvas_transferencia_grid(
+                                    dados_filtrados,
+                                    etapas=etapas_selecionadas,
+                                    figsize=(20, 16)
+                                )
+                                st.pyplot(fig)
+                                plt.close()
+                        except Exception as e:
+                            st.error(f"Erro ao gerar gráfico: {e}")
+            else:
+                st.warning("⚠️ Selecione pelo menos um device para plotar")
         else:
             st.warning("⚠️ Selecione pelo menos uma etapa para plotar")
     else:
@@ -405,6 +526,221 @@ with tab4:
             st.warning("⚠️ Selecione pelo menos uma concentração")
     else:
         st.warning("⚠️ Nenhuma concentração disponível nos dados carregados")
+
+
+# ==================== TAB 5: Tabelão ====================
+with tab5:
+    st.header("🗃️ Tabelão de Dados (Formato Long)")
+    st.markdown("Estrutura consolidada para execução de análises e plots: **chip, etapa, V_G, device, I_DS**")
+    st.markdown(f"**📂 Experimento:** `{experimento_selecionado}`")
+    st.markdown(f"**📁 Pasta:** `{pasta_dados}`")
+
+    with st.spinner("Montando tabelão..."):
+        df_exec = construir_tabelao(pasta_dados)
+
+    if df_exec.empty:
+        st.warning("⚠️ Não foi possível montar o tabelão com os dados disponíveis.")
+    else:
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("Linhas", f"{len(df_exec):,}")
+        col_b.metric("Chips", df_exec['chip'].nunique())
+        col_c.metric("Etapas", df_exec['etapa'].nunique())
+
+        resumo = (
+            df_exec.groupby('chip')
+            .agg(
+                n_etapas=('etapa', 'nunique'),
+                n_devices=('device', 'nunique'),
+                n_pontos=('I_DS', 'size')
+            )
+            .sort_values(['n_etapas', 'n_devices', 'n_pontos'], ascending=False)
+            .reset_index()
+        )
+
+        st.markdown("### 📊 Resumo por chip")
+        st.dataframe(resumo, use_container_width=True)
+
+        st.markdown("### 🔎 Visualização do tabelão")
+        chips_filtro = st.multiselect(
+            "Filtrar chips:",
+            sorted(df_exec['chip'].unique().tolist()),
+            default=sorted(df_exec['chip'].unique().tolist())
+        )
+        etapas_filtro = st.multiselect(
+            "Filtrar etapas:",
+            sorted(df_exec['etapa'].unique().tolist()),
+            default=sorted(df_exec['etapa'].unique().tolist())
+        )
+
+        df_view = df_exec[
+            df_exec['chip'].isin(chips_filtro) &
+            df_exec['etapa'].isin(etapas_filtro)
+        ]
+
+        st.caption(f"Mostrando {len(df_view):,} linhas após filtros")
+        st.dataframe(df_view, use_container_width=True, height=420)
+
+        st.markdown("---")
+        st.markdown("### 📈 Plot interativo a partir do tabelão")
+
+        chips_plot = sorted(df_view['chip'].unique().tolist())
+        if not chips_plot:
+            st.warning("⚠️ Não há chips disponíveis após os filtros para plotagem.")
+        else:
+            chip_plot = st.selectbox(
+                "Chip para plot:",
+                chips_plot,
+                key="chip_plot_tabelao"
+            )
+
+            etapas_chip_plot = sorted(df_view[df_view['chip'] == chip_plot]['etapa'].unique().tolist())
+            etapas_plot_sel = st.multiselect(
+                "Etapas para plot:",
+                etapas_chip_plot,
+                default=etapas_chip_plot,
+                key="etapas_plot_tabelao"
+            )
+
+            modo_plot = st.radio(
+                "Modo de visualização:",
+                ["Plot simples", "Grid de gráficos", "Comparativo de devices"],
+                horizontal=True,
+                key="modo_plot_tabelao"
+            )
+
+            dados_plot_tab = df_para_dados_plot(df_view, chip_sel=chip_plot, etapas_sel=etapas_plot_sel)
+
+            if not dados_plot_tab:
+                st.warning("⚠️ Não foi possível reconstruir dados de plot com os filtros atuais.")
+            else:
+                plotter_tab = PlotterGFET(chip_name=chip_plot)
+                etapa_ref = list(dados_plot_tab.keys())[0]
+                devices_plot_tab = [c for c in dados_plot_tab[etapa_ref].columns if c != 'V_G']
+
+                if not devices_plot_tab:
+                    st.warning("⚠️ Nenhum device disponível para plotagem.")
+                else:
+                    if modo_plot == "Plot simples":
+                        col_plot_1, col_plot_2 = st.columns([2, 1])
+                        with col_plot_1:
+                            device_plot = st.selectbox(
+                                "Device:",
+                                devices_plot_tab,
+                                key="device_plot_tabelao"
+                            )
+                        with col_plot_2:
+                            normalizado_plot = st.checkbox(
+                                "Normalizado",
+                                value=False,
+                                key="normalizado_plot_tabelao"
+                            )
+
+                        if st.button("Gerar Plot Simples", key="btn_plot_simples_tabelao"):
+                            try:
+                                fig = plotter_tab.plot_device_individual(
+                                    dados=dados_plot_tab,
+                                    device=device_plot,
+                                    etapas=list(dados_plot_tab.keys()),
+                                    normalizado=normalizado_plot,
+                                    figsize=(10, 6)
+                                )
+                                st.pyplot(fig)
+                                plt.close()
+                            except Exception as e:
+                                st.error(f"Erro ao gerar plot simples: {e}")
+                    elif modo_plot == "Grid de gráficos":
+                        col_grid_1, col_grid_2 = st.columns([2, 1])
+                        with col_grid_1:
+                            devices_grid = st.multiselect(
+                                "Devices para grid:",
+                                devices_plot_tab,
+                                default=devices_plot_tab[:min(6, len(devices_plot_tab))],
+                                key="devices_grid_tabelao"
+                            )
+                        with col_grid_2:
+                            largura_grid = st.slider(
+                                "Largura figura",
+                                min_value=12,
+                                max_value=24,
+                                value=16,
+                                step=1,
+                                key="largura_grid_tabelao"
+                            )
+
+                        if st.button("Gerar Grid", key="btn_grid_tabelao"):
+                            if not devices_grid:
+                                st.warning("⚠️ Selecione pelo menos um device para o grid.")
+                            else:
+                                try:
+                                    fig = plotter_tab.plot_curvas_transferencia_grid(
+                                        dados=dados_plot_tab,
+                                        etapas=list(dados_plot_tab.keys()),
+                                        figsize=(largura_grid, 10),
+                                        devices=devices_grid
+                                    )
+                                    st.pyplot(fig)
+                                    plt.close()
+                                except Exception as e:
+                                    st.error(f"Erro ao gerar grid: {e}")
+                    else:
+                        col_comp_1, col_comp_2, col_comp_3 = st.columns([2, 2, 1])
+
+                        with col_comp_1:
+                            etapa_comp = st.selectbox(
+                                "Etapa para comparação:",
+                                list(dados_plot_tab.keys()),
+                                key="etapa_comp_tabelao"
+                            )
+
+                        with col_comp_2:
+                            devices_comp = st.multiselect(
+                                "Devices para comparar:",
+                                devices_plot_tab,
+                                default=devices_plot_tab[:min(4, len(devices_plot_tab))],
+                                key="devices_comp_tabelao"
+                            )
+
+                        with col_comp_3:
+                            normalizar_comp = st.checkbox(
+                                "Normalizar",
+                                value=False,
+                                key="normalizar_comp_tabelao"
+                            )
+
+                        if st.button("Gerar Comparativo", key="btn_comp_tabelao"):
+                            if not devices_comp:
+                                st.warning("⚠️ Selecione pelo menos um device para comparar.")
+                            else:
+                                try:
+                                    df_comp = dados_plot_tab[etapa_comp]
+                                    fig, ax = plt.subplots(figsize=(11, 7), facecolor="white")
+
+                                    for device in devices_comp:
+                                        if device not in df_comp.columns:
+                                            continue
+                                        y = df_comp[device].copy()
+                                        if normalizar_comp:
+                                            max_y = y.max()
+                                            if pd.notna(max_y) and max_y != 0:
+                                                y = y / max_y
+                                        ax.plot(df_comp['V_G'], y, linewidth=1.8, label=f"Device {device}")
+
+                                    ax.set_xlabel("V$_{GS}$ (V)")
+                                    if normalizar_comp:
+                                        ax.set_ylabel("I$_{DS}$ Normalizado")
+                                        ax.set_title(f"Comparativo de Devices - {chip_plot} | Etapa {etapa_comp} (Normalizado)")
+                                    else:
+                                        ax.set_ylabel("I$_{DS}$ (A)")
+                                        ax.set_yscale("log")
+                                        ax.set_title(f"Comparativo de Devices - {chip_plot} | Etapa {etapa_comp}")
+                                    ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+                                    ax.legend(fontsize=9, ncol=2)
+                                    plt.tight_layout()
+
+                                    st.pyplot(fig)
+                                    plt.close()
+                                except Exception as e:
+                                    st.error(f"Erro ao gerar comparativo: {e}")
 
 # ==================== RODAPÉ ====================
 st.markdown("---")

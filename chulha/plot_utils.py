@@ -107,7 +107,8 @@ class PlotterGFET:
     
     def plot_curvas_transferencia_grid(self, dados: Dict[str, pd.DataFrame], 
                                        etapas: Optional[List[str]] = None,
-                                       figsize: Tuple[int, int] = (20, 16)) -> plt.Figure:
+                                       figsize: Tuple[int, int] = (20, 16),
+                                       devices: Optional[List[str]] = None) -> plt.Figure:
         """
         Plota grid com curvas de transferência de todos os devices
         
@@ -130,13 +131,23 @@ class PlotterGFET:
         
         # Obter colunas (devices)
         primeira_etapa = etapas_disponiveis[0]
-        colunas = [col for col in dados[primeira_etapa].columns if col != 'V_G']
+        colunas_disponiveis = [col for col in dados[primeira_etapa].columns if col != 'V_G']
+        if devices:
+            colunas = [d for d in devices if d in colunas_disponiveis]
+        else:
+            colunas = colunas_disponiveis
         
-        # Criar subplots
-        fig, axes = plt.subplots(4, 5, figsize=figsize, facecolor="white")
-        axes = axes.flatten()
+        if not colunas:
+            raise ValueError("Nenhum device disponível para plotagem")
         
-        for idx, coluna in enumerate(colunas[:20]):
+        # Criar subplots dinâmicos
+        total = len(colunas)
+        ncols = min(5, total)
+        nrows = int(np.ceil(total / ncols))
+        fig, axes = plt.subplots(nrows, ncols, figsize=figsize, facecolor="white")
+        axes = np.array(axes).flatten()
+        
+        for idx, coluna in enumerate(colunas):
             ax = axes[idx]
             
             for etapa in etapas_disponiveis:
@@ -156,6 +167,10 @@ class PlotterGFET:
             ax.set_xticks(x_ticks)
             ax.set_xticklabels([str(x) for x in x_ticks])
             ax.legend(fontsize=8)
+        
+        # Remover eixos extras
+        for j in range(total, len(axes)):
+            fig.delaxes(axes[j])
         
         plt.tight_layout()
         return fig

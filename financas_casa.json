@@ -114,7 +114,7 @@
       "nome": "Moto",
       "vencimento": 19,
       "valor": 500.0,
-      "status_code": "aberto",
+      "status_code": "pago",
       "parcela_atual": 2,
       "total_parcelas": 6
     },
