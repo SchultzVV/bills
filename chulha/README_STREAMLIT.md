@@ -12,12 +12,29 @@ pip install streamlit pandas numpy matplotlib seaborn
 
 ### 2. Executar o App Streamlit
 
+**Entre na pasta `chulha` antes de rodar:**
+```bash
+cd /home/v/Documents/contas/chulha
+```
+
+**Opção 1 - App estendido (corridas e filtros avançados):**
+```bash
+streamlit run streamlit_app_extended.py
+```
+
+**Opção 2 - App novo com aba de Tabelão:**
+```bash
+streamlit run streamlit_app_plots.py
+```
+
+> Se quiser escolher outra porta: `streamlit run streamlit_app_plots.py --server.port 8502`
+
 **Opção A - Usando o script:**
 ```bash
 ./run_streamlit.sh
 ```
 
-**Opção B - Comando direto:**
+**Opção B - Comando direto (versão estendida):**
 ```bash
 streamlit run streamlit_app_extended.py
 ```
