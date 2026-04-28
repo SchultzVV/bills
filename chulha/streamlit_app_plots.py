@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import os
 import glob
+import io
 
 # Importar módulos locais
 from dataprep import DataLoader
@@ -199,6 +200,15 @@ st.sidebar.markdown("### 📊 Estatísticas")
 st.sidebar.success(f"✅ Etapas carregadas: **{len(dados)}**")
 st.sidebar.info(f"🎯 Devices disponíveis: **{len(devices_disponiveis)}**")
 
+# Opção de incluir média dos blanks
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🎨 Opções de Visualização")
+incluir_media_blanks = st.sidebar.checkbox(
+    "📊 Incluir Média dos BLANKS (B1+B2+B3)",
+    value=True,
+    help="Mostra a linha de média dos blanks em rosa nos gráficos"
+)
+
 # Mostrar arquivos carregados
 with st.sidebar.expander("📋 Ver Etapas Carregadas"):
     etapas_labels = {
@@ -300,7 +310,8 @@ with tab1:
                             fig = plotter.plot_curvas_transferencia_grid(
                                 dados_filtrados, 
                                 etapas=etapas_selecionadas,
-                                figsize=(20, 16)
+                                figsize=(20, 16),
+                                incluir_media_blanks=incluir_media_blanks
                             )
                             st.pyplot(fig)
                             plt.close()
@@ -334,7 +345,8 @@ with tab1:
                                 fig = plotter.plot_curvas_transferencia_grid(
                                     dados_filtrados,
                                     etapas=etapas_selecionadas,
-                                    figsize=(20, 16)
+                                    figsize=(20, 16),
+                                    incluir_media_blanks=incluir_media_blanks
                                 )
                                 st.pyplot(fig)
                                 plt.close()
@@ -385,7 +397,8 @@ with tab2:
                         fig = plotter.plot_curvas_normalizadas_grid(
                             dados, 
                             etapas=etapas_selecionadas_norm,
-                            figsize=(20, 16)
+                            figsize=(20, 16),
+                            incluir_media_blanks=incluir_media_blanks
                         )
                         st.pyplot(fig)
                         plt.close()
@@ -442,7 +455,8 @@ with tab3:
                         dados, 
                         device_selecionado, 
                         etapas=etapas_device_sel,
-                        normalizado=normalizado
+                        normalizado=normalizado,
+                        incluir_media_blanks=incluir_media_blanks
                     )
                     st.pyplot(fig)
                     plt.close()
@@ -620,6 +634,7 @@ with tab5:
                 if not devices_plot_tab:
                     st.warning("⚠️ Nenhum device disponível para plotagem.")
                 else:
+                    devices_grid = []
                     if modo_plot == "Plot simples":
                         col_plot_1, col_plot_2 = st.columns([2, 1])
                         with col_plot_1:
@@ -734,13 +749,68 @@ with tab5:
                                         ax.set_yscale("log")
                                         ax.set_title(f"Comparativo de Devices - {chip_plot} | Etapa {etapa_comp}")
                                     ax.grid(True, which="both", linestyle="--", linewidth=0.5)
-                                    ax.legend(fontsize=9, ncol=2)
+                                    ax.legend(fontsize=9, ncol=2, loc='center left', bbox_to_anchor=(1.02, 0.5), frameon=False)
+                                    fig.subplots_adjust(right=0.82)
                                     plt.tight_layout()
 
                                     st.pyplot(fig)
                                     plt.close()
                                 except Exception as e:
                                     st.error(f"Erro ao gerar comparativo: {e}")
+
+                    st.markdown("---")
+                    st.markdown("### 📌 Device em Destaque")
+                    devices_destaque_opcoes = devices_grid if modo_plot == "Grid de gráficos" and devices_grid else devices_plot_tab
+                    device_destaque = st.selectbox(
+                        "Escolha um device para gráfico grande:",
+                        devices_destaque_opcoes,
+                        key="device_destaque_tabelao"
+                    )
+                    normalizado_destaque = st.checkbox(
+                        "Normalizar",
+                        value=False,
+                        key="normalizado_destaque_tabelao"
+                    )
+                    observacao_destaque = st.text_input(
+                        "Observação para incluir na figura:",
+                        key="observacao_destaque_tabelao"
+                    )
+
+                    if st.button("Gerar Gráfico Grande", key="btn_destaque_tabelao"):
+                        try:
+                            fig = plotter_tab.plot_device_individual(
+                                dados=dados_plot_tab,
+                                device=device_destaque,
+                                etapas=list(dados_plot_tab.keys()),
+                                normalizado=normalizado_destaque,
+                                figsize=(12, 8)
+                            )
+                            if observacao_destaque:
+                                fig.subplots_adjust(bottom=0.18)
+                                fig.text(0.5, 0.03, observacao_destaque, ha='center', fontsize=10, color='black')
+                            else:
+                                fig.subplots_adjust(bottom=0.12)
+
+                            st.pyplot(fig)
+                            buf = io.BytesIO()
+                            fig.savefig(
+                                buf,
+                                format="png",
+                                dpi=300,
+                                facecolor="white",
+                                bbox_inches="tight",
+                                pad_inches=0.8
+                            )
+                            buf.seek(0)
+                            st.download_button(
+                                "📥 Baixar PNG",
+                                data=buf,
+                                file_name=f"device_{device_destaque}.png",
+                                mime="image/png"
+                            )
+                            plt.close(fig)
+                        except Exception as e:
+                            st.error(f"Erro ao gerar gráfico grande: {e}")
 
 # ==================== RODAPÉ ====================
 st.markdown("---")
