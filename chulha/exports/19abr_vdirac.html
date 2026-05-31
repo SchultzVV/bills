@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>V_Dirac — Personalização</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f4f4f4;display:flex;height:100vh;overflow:hidden}
+#sidebar{width:290px;min-width:240px;background:#fff;border-right:1px solid #dde;overflow-y:auto;
+          padding:14px 12px;display:flex;flex-direction:column;gap:10px}
+#main{flex:1;display:flex;flex-direction:column;padding:10px;gap:8px;min-width:0}
+h3{font-size:13px;font-weight:700;color:#333;border-bottom:1px solid #eee;padding-bottom:5px;margin-bottom:2px}
+.block{background:#f8f8fb;border:1px solid #e0e4ee;border-radius:6px;padding:9px 10px}
+.bname{font-weight:600;font-size:12px;color:#333;margin-bottom:6px}
+label{font-size:11px;color:#555;display:block;margin-bottom:2px;margin-top:5px}
+input[type=text]{width:100%;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px}
+input[type=color]{width:44px;height:26px;border:none;border-radius:4px;padding:1px;cursor:pointer}
+.row{display:flex;gap:7px;align-items:flex-end}
+#titulo-input{width:100%;padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:4px}
+.btn{padding:8px 12px;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:600}
+#btn-apply{background:#1976d2;color:#fff;width:100%}
+#btn-apply:hover{background:#1255a0}
+#btn-png{background:#388e3c;color:#fff}
+#btn-png:hover{background:#276228}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+#chart{flex:1;min-height:0}
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <h3>⚙️ Personalizar</h3>
+  <div>
+    <label>Título</label>
+    <input type="text" id="titulo-input">
+  </div>
+  <div id="etapas-panel"></div>
+  <button class="btn" id="btn-apply" onclick="aplicar()">▶ Aplicar</button>
+</div>
+<div id="main">
+  <div class="toolbar">
+    <button class="btn" id="btn-png" onclick="baixarPNG()">📥 Baixar PNG</button>
+  </div>
+  <div id="chart"></div>
+</div>
+<script>
+const ETAPAS = [{"id": "bare", "label": "BARE", "color": "#8b008b", "media": 0.10925389542464709, "sem": 0.004908587945433199}, {"id": "etoh", "label": "ETOH", "color": "#0032ff", "media": -0.035362521568225225, "sem": 0.00507433298017331}, {"id": "ddt", "label": "DDT", "color": "#00ff99", "media": -0.1475821892578445, "sem": 0.005373284101278441}, {"id": "pbse", "label": "PBSE", "color": "#98ff00", "media": -0.09280830383791129, "sem": 0.00579285527974912}, {"id": "apt", "label": "APT", "color": "#ffb700", "media": 0.19203504462363163, "sem": 0.008052726233076757}, {"id": "eta", "label": "ETA", "color": "#ff0000", "media": 0.15696634833729897, "sem": 0.006964528759956979}];
+const CHIPS  = [{"name": "C1", "valores": [0.10925389542464709, -0.035362521568225225, -0.1475821892578445, -0.09280830383791129, 0.19203504462363163, 0.15696634833729897]}];
+const TITULO_DEFAULT = "V_Dirac — Charge Neutrality Point — 6 devices";
+document.getElementById('titulo-input').value = TITULO_DEFAULT;
+
+function buildPanel(){
+  const p = document.getElementById('etapas-panel');
+  p.innerHTML = '';
+  ETAPAS.forEach((e,i)=>{
+    const d = document.createElement('div');
+    d.className = 'block';
+    d.innerHTML = `
+      <div class="bname">${e.label}</div>
+      <div class="row">
+        <div><label>Cor</label><br>
+          <input type="color" id="cor-${i}" value="${e.color}">
+        </div>
+        <div style="flex:1"><label>Label</label>
+          <input type="text" id="lbl-${i}" value="${e.label}">
+        </div>
+      </div>`;
+    p.appendChild(d);
+  });
+}
+
+function aplicar(){
+  const titulo = document.getElementById('titulo-input').value;
+  const traces = [];
+
+  // Chip lines (grey)
+  CHIPS.forEach(ch=>{
+    traces.push({x: ETAPAS.map((_,i)=>document.getElementById('lbl-'+i).value),
+                  y: ch.valores, mode:'lines+markers', name: ch.name,
+                  line:{color:'grey',width:1}, marker:{size:5,color:'grey'},
+                  opacity:0.35, showlegend:true});
+  });
+
+  // Mean markers with error bars
+  traces.push({
+    x: ETAPAS.map((_,i)=>document.getElementById('lbl-'+i).value),
+    y: ETAPAS.map(e=>e.media),
+    error_y: {type:'data', array: ETAPAS.map(e=>e.sem), visible:true,
+               color:'black', thickness:2, width:8},
+    mode:'markers', name:'Média ± SEM',
+    marker:{
+      size: 14,
+      color: ETAPAS.map((_,i)=>document.getElementById('cor-'+i).value),
+      line: {color:'black', width:1.5}
+    }
+  });
+
+  const layout={
+    title:{text:titulo, font:{size:16}},
+    xaxis:{title:'Etapa', showgrid:true, gridcolor:'#e0e0e0', zeroline:false},
+    yaxis:{title:'V_Dirac (V)', showgrid:true, gridcolor:'#e0e0e0', zeroline:false},
+    plot_bgcolor:'white', paper_bgcolor:'white',
+    font:{size:13}, legend:{font:{size:11}},
+    margin:{l:75,r:25,t:60,b:60}
+  };
+  Plotly.react('chart', traces, layout, {responsive:true});
+}
+
+function baixarPNG(){
+  Plotly.downloadImage('chart',{format:'png',width:1400,height:800,filename:'vdirac_gfet'});
+}
+
+buildPanel();
+aplicar();
+</script>
+</body>
+</html>

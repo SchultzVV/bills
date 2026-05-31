@@ -1197,6 +1197,8 @@ with tab6:
                                 st.markdown("#### 📈 V$_{Dirac}$ - Charge Neutrality Point")
                                 
                                 # Processar V_Dirac
+                                _df_vd_html    = None
+                                _stats_vd_html = None
                                 try:
                                     df_vdirac_consolidado, stats_vdirac_consolidado = plotter.processar_vdirac_multiplos_chips(
                                         df_filtrado,
@@ -1207,6 +1209,8 @@ with tab6:
                                     if df_vdirac_consolidado.empty:
                                         st.warning("⚠️ Não foi possível calcular V_Dirac com os dados")
                                     else:
+                                        _df_vd_html    = df_vdirac_consolidado
+                                        _stats_vd_html = stats_vdirac_consolidado
                                         # Gerar gráfico
                                         fig_consolidado = plotter.plot_vdirac_evolucao(
                                             df_vdirac_consolidado,
@@ -1238,7 +1242,7 @@ with tab6:
                                         )
                                         
                                         plt.close(fig_consolidado)
-                                        
+
                                         # Tabelas de resultados
                                         st.markdown("#### 📋 Estatísticas Consolidadas")
                                         
@@ -1753,145 +1757,282 @@ aplicar();
 </script>
 </body>
 </html>"""
-                                
-                                # --- Catálogo de gráficos ---
-                                _etapas_ord_h  = ['bare', 'etoh', 'ddt', 'pbse', 'apt', 'eta']
-                                _etapas_bk_h   = ['b1', 'b2', 'b3']
-                                _etapas_ng_h   = ['c10ng', 'c25ng', 'c50ng', 'c75ng', 'c100ng']
-                                _etapas_am_h   = ['menos18', 'menos17', 'menos16',
-                                                  'menos15', 'menos14', 'menos13',
-                                                  'menos12', 'menos11', 'menos10']
-                                _labels_h = {
-                                    'bare':'BARE','etoh':'ETOH','ddt':'DDT','pbse':'PBSE','apt':'APT','eta':'ETA',
-                                    'b1':'BLANK1','b2':'BLANK2','b3':'BLANK3',
-                                    'c10ng':'10 ng/mL','c25ng':'25 ng/mL','c50ng':'50 ng/mL',
-                                    'c75ng':'75 ng/mL','c100ng':'100 ng/mL',
-                                    'menos18':'1 aM','menos17':'10 aM','menos16':'100 aM',
-                                    'menos15':'1 fM','menos14':'10 fM','menos13':'100 fM',
-                                    'menos12':'1 pM','menos11':'10 pM','menos10':'100 pM',
-                                }
-                                
-                                _graficos_h = {}
-                                if any(e in etapas_presentes for e in _etapas_ord_h):
-                                    _graficos_h["Curvas médias — bare/etoh/ddt/pbse/apt/eta"] = {
-                                        'tipo':'simples','curvas':_etapas_ord_h,
-                                        'titulo': f"Curvas Médias por Etapa — {total_devices_selecionados} devices"
+
+                                def _gerar_html_vdirac(etapas_data, chips_data, titulo_default):
+                                    """
+                                    etapas_data : lista de dicts {id, label, color, media, sem}
+                                    chips_data  : lista de dicts {name, valores: [float|None]}
+                                    """
+                                    import json as _jvd
+                                    _etapas_js = _jvd.dumps(etapas_data, ensure_ascii=False)
+                                    _chips_js  = _jvd.dumps(chips_data,  ensure_ascii=False)
+                                    _titulo_js = _jvd.dumps(titulo_default, ensure_ascii=False)
+                                    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>V_Dirac — Personalização</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Segoe UI',Arial,sans-serif;background:#f4f4f4;display:flex;height:100vh;overflow:hidden}}
+#sidebar{{width:290px;min-width:240px;background:#fff;border-right:1px solid #dde;overflow-y:auto;
+          padding:14px 12px;display:flex;flex-direction:column;gap:10px}}
+#main{{flex:1;display:flex;flex-direction:column;padding:10px;gap:8px;min-width:0}}
+h3{{font-size:13px;font-weight:700;color:#333;border-bottom:1px solid #eee;padding-bottom:5px;margin-bottom:2px}}
+.block{{background:#f8f8fb;border:1px solid #e0e4ee;border-radius:6px;padding:9px 10px}}
+.bname{{font-weight:600;font-size:12px;color:#333;margin-bottom:6px}}
+label{{font-size:11px;color:#555;display:block;margin-bottom:2px;margin-top:5px}}
+input[type=text]{{width:100%;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px}}
+input[type=color]{{width:44px;height:26px;border:none;border-radius:4px;padding:1px;cursor:pointer}}
+.row{{display:flex;gap:7px;align-items:flex-end}}
+#titulo-input{{width:100%;padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:4px}}
+.btn{{padding:8px 12px;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:600}}
+#btn-apply{{background:#1976d2;color:#fff;width:100%}}
+#btn-apply:hover{{background:#1255a0}}
+#btn-png{{background:#388e3c;color:#fff}}
+#btn-png:hover{{background:#276228}}
+.toolbar{{display:flex;gap:8px;flex-wrap:wrap}}
+#chart{{flex:1;min-height:0}}
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <h3>⚙️ Personalizar</h3>
+  <div>
+    <label>Título</label>
+    <input type="text" id="titulo-input">
+  </div>
+  <div id="etapas-panel"></div>
+  <button class="btn" id="btn-apply" onclick="aplicar()">▶ Aplicar</button>
+</div>
+<div id="main">
+  <div class="toolbar">
+    <button class="btn" id="btn-png" onclick="baixarPNG()">📥 Baixar PNG</button>
+  </div>
+  <div id="chart"></div>
+</div>
+<script>
+const ETAPAS = {_etapas_js};
+const CHIPS  = {_chips_js};
+const TITULO_DEFAULT = {_titulo_js};
+document.getElementById('titulo-input').value = TITULO_DEFAULT;
+
+function buildPanel(){{
+  const p = document.getElementById('etapas-panel');
+  p.innerHTML = '';
+  ETAPAS.forEach((e,i)=>{{
+    const d = document.createElement('div');
+    d.className = 'block';
+    d.innerHTML = `
+      <div class="bname">${{e.label}}</div>
+      <div class="row">
+        <div><label>Cor</label><br>
+          <input type="color" id="cor-${{i}}" value="${{e.color}}">
+        </div>
+        <div style="flex:1"><label>Label</label>
+          <input type="text" id="lbl-${{i}}" value="${{e.label}}">
+        </div>
+      </div>`;
+    p.appendChild(d);
+  }});
+}}
+
+function aplicar(){{
+  const titulo = document.getElementById('titulo-input').value;
+  const traces = [];
+
+  // Chip lines (grey)
+  CHIPS.forEach(ch=>{{
+    traces.push({{x: ETAPAS.map((_,i)=>document.getElementById('lbl-'+i).value),
+                  y: ch.valores, mode:'lines+markers', name: ch.name,
+                  line:{{color:'grey',width:1}}, marker:{{size:5,color:'grey'}},
+                  opacity:0.35, showlegend:true}});
+  }});
+
+  // Mean markers with error bars
+  traces.push({{
+    x: ETAPAS.map((_,i)=>document.getElementById('lbl-'+i).value),
+    y: ETAPAS.map(e=>e.media),
+    error_y: {{type:'data', array: ETAPAS.map(e=>e.sem), visible:true,
+               color:'black', thickness:2, width:8}},
+    mode:'markers', name:'Média ± SEM',
+    marker:{{
+      size: 14,
+      color: ETAPAS.map((_,i)=>document.getElementById('cor-'+i).value),
+      line: {{color:'black', width:1.5}}
+    }}
+  }});
+
+  const layout={{
+    title:{{text:titulo, font:{{size:16}}}},
+    xaxis:{{title:'Etapa', showgrid:true, gridcolor:'#e0e0e0', zeroline:false}},
+    yaxis:{{title:'V_Dirac (V)', showgrid:true, gridcolor:'#e0e0e0', zeroline:false}},
+    plot_bgcolor:'white', paper_bgcolor:'white',
+    font:{{size:13}}, legend:{{font:{{size:11}}}},
+    margin:{{l:75,r:25,t:60,b:60}}
+  }};
+  Plotly.react('chart', traces, layout, {{responsive:true}});
+}}
+
+function baixarPNG(){{
+  Plotly.downloadImage('chart',{{format:'png',width:1400,height:800,filename:'vdirac_gfet'}});
+}}
+
+buildPanel();
+aplicar();
+</script>
+</body>
+</html>"""
+
+                                # --- Auto-gerar HTMLs na pasta exports ---
+                                try:
+                                    import pathlib as _pl
+                                    _pasta_exp = _pl.Path(__file__).parent / "exports"
+                                    _pasta_exp.mkdir(exist_ok=True)
+
+                                    _etapas_ord_h = ['bare', 'etoh', 'ddt', 'pbse', 'apt', 'eta']
+                                    _etapas_bk_h  = ['b1', 'b2', 'b3']
+                                    _etapas_ng_h  = ['c10ng', 'c25ng', 'c50ng', 'c75ng', 'c100ng']
+                                    _etapas_am_h  = ['menos18', 'menos17', 'menos16',
+                                                     'menos15', 'menos14', 'menos13',
+                                                     'menos12', 'menos11', 'menos10']
+                                    _labels_h = {
+                                        'bare':'BARE','etoh':'ETOH','ddt':'DDT','pbse':'PBSE','apt':'APT','eta':'ETA',
+                                        'b1':'BLANK1','b2':'BLANK2','b3':'BLANK3',
+                                        'c10ng':'10 ng/mL','c25ng':'25 ng/mL','c50ng':'50 ng/mL',
+                                        'c75ng':'75 ng/mL','c100ng':'100 ng/mL',
+                                        'menos18':'1 aM','menos17':'10 aM','menos16':'100 aM',
+                                        'menos15':'1 fM','menos14':'10 fM','menos13':'100 fM',
+                                        'menos12':'1 pM','menos11':'10 pM','menos10':'100 pM',
                                     }
-                                if any(e in etapas_presentes for e in _etapas_bk_h + _etapas_ng_h):
-                                    _graficos_h["Curvas médias — BLANK + concentrações (ng/mL)"] = {
-                                        'tipo':'blank+concs','blanks':_etapas_bk_h,'curvas':_etapas_ng_h,
-                                        'titulo': f"Curvas Médias — BLANK + ng/mL — {total_devices_selecionados} devices"
-                                    }
-                                if any(e in etapas_presentes for e in _etapas_bk_h + _etapas_am_h):
-                                    _graficos_h["Curvas médias — BLANK + diluição (aM → pM)"] = {
-                                        'tipo':'blank+concs','blanks':_etapas_bk_h,'curvas':_etapas_am_h,
-                                        'titulo': f"Curvas Médias — BLANK + Diluição — {total_devices_selecionados} devices"
-                                    }
-                                
-                                if not _graficos_h:
-                                    st.warning("⚠️ Nenhum dado disponível para exportar")
-                                else:
-                                    _sel_h = st.selectbox(
-                                        "Gráfico para exportar:",
-                                        list(_graficos_h.keys()),
-                                        key="html_graf_sel"
-                                    )
-                                    
-                                    if st.button("🔄 Gerar HTML", key="btn_gerar_html", use_container_width=True):
-                                        try:
-                                            _info_h = _graficos_h[_sel_h]
-                                            
-                                            def _media_vg(etapa_k):
-                                                return (df_filtrado[df_filtrado['etapa'] == etapa_k]
-                                                        .groupby('V_G', sort=False)['I_DS'].mean()
-                                                        .reset_index().sort_values('V_G'))
-                                            
-                                            def _media_bks(blist):
-                                                pres = [e for e in blist if e in etapas_presentes]
-                                                return (df_filtrado[df_filtrado['etapa'].isin(pres)]
-                                                        .groupby('V_G', sort=False)['I_DS'].mean()
-                                                        .reset_index().sort_values('V_G'))
-                                            
-                                            _curvas_h = []
-                                            
-                                            if _info_h['tipo'] == 'blank+concs':
-                                                if any(e in etapas_presentes for e in _info_h['blanks']):
-                                                    df_bk = _media_bks(_info_h['blanks'])
-                                                    _curvas_h.append({
-                                                        'id': '__blank__', 'label': 'BLANK',
-                                                        'color': _to_hex(plotter.cores_etapas.get('b_avg','#FF1493')),
-                                                        'linestyle': 'dash', 'linewidth': 2.5,
-                                                        'x': df_bk['V_G'].tolist(),
-                                                        'y': df_bk['I_DS'].tolist()
-                                                    })
-                                                for _e in _info_h['curvas']:
-                                                    if _e not in etapas_presentes:
-                                                        continue
-                                                    df_e = _media_vg(_e)
-                                                    _cor_e = _to_hex(plotter.cores_etapas.get(
-                                                        _e, plotter.cores_concentracoes.get(_e, '#000000')))
-                                                    _curvas_h.append({
-                                                        'id': _e,
-                                                        'label': _labels_h.get(_e, _e),
-                                                        'color': _cor_e,
-                                                        'linestyle': 'solid', 'linewidth': 2.2,
-                                                        'x': df_e['V_G'].tolist(),
-                                                        'y': df_e['I_DS'].tolist()
-                                                    })
-                                            else:
-                                                for _e in _info_h['curvas']:
-                                                    if _e not in etapas_presentes:
-                                                        continue
-                                                    df_e = _media_vg(_e)
-                                                    _cor_e = _to_hex(plotter.cores_etapas.get(_e, '#000000'))
-                                                    _curvas_h.append({
-                                                        'id': _e,
-                                                        'label': _labels_h.get(_e, _e),
-                                                        'color': _cor_e,
-                                                        'linestyle': 'solid', 'linewidth': 2.2,
-                                                        'x': df_e['V_G'].tolist(),
-                                                        'y': df_e['I_DS'].tolist()
-                                                    })
-                                            
-                                            if not _curvas_h:
-                                                st.warning("⚠️ Nenhuma curva disponível para este gráfico")
-                                            else:
-                                                _html_out = _gerar_html_customizavel(_curvas_h, _info_h['titulo'])
-                                                st.session_state['_html_exportar'] = _html_out
-                                                st.session_state['_html_exportar_nome'] = _sel_h
-                                                # Salvar diretamente na pasta local
-                                                import pathlib as _pl, re as _re
-                                                _slug = _re.sub(r'[^a-zA-Z0-9_-]', '_', _sel_h)[:60]
-                                                _pasta_exp = _pl.Path(__file__).parent / "exports"
-                                                _pasta_exp.mkdir(exist_ok=True)
-                                                _caminho_html = _pasta_exp / f"{_slug}.html"
-                                                _caminho_html.write_text(_html_out, encoding='utf-8')
-                                                st.session_state['_html_exportar_caminho'] = str(_caminho_html)
-                                                st.success(f"✅ HTML salvo em `{_caminho_html}`  — e o botão de download aparece abaixo.")
-                                        
-                                        except Exception as e:
-                                            st.error(f"❌ Erro ao gerar HTML: {e}")
-                                            import traceback
-                                            st.error(traceback.format_exc())
-                        
+
+                                    def _mv(ek):
+                                        return (df_filtrado[df_filtrado['etapa'] == ek]
+                                                .groupby('V_G', sort=False)['I_DS'].mean()
+                                                .reset_index().sort_values('V_G'))
+
+                                    def _mb(blist):
+                                        pres = [e for e in blist if e in etapas_presentes]
+                                        return (df_filtrado[df_filtrado['etapa'].isin(pres)]
+                                                .groupby('V_G', sort=False)['I_DS'].mean()
+                                                .reset_index().sort_values('V_G'))
+
+                                    _graficos_auto = {}
+                                    if any(e in etapas_presentes for e in _etapas_ord_h):
+                                        _graficos_auto["etapas"] = {
+                                            'titulo': f"Curvas Médias por Etapa — {total_devices_selecionados} devices",
+                                            'tipo': 'simples', 'curvas': _etapas_ord_h
+                                        }
+                                    if any(e in etapas_presentes for e in _etapas_bk_h + _etapas_ng_h):
+                                        _graficos_auto["blank_ng"] = {
+                                            'titulo': f"Curvas Médias — BLANK + ng/mL — {total_devices_selecionados} devices",
+                                            'tipo': 'blank+concs', 'blanks': _etapas_bk_h, 'curvas': _etapas_ng_h
+                                        }
+                                    if any(e in etapas_presentes for e in _etapas_bk_h + _etapas_am_h):
+                                        _graficos_auto["blank_diluicao"] = {
+                                            'titulo': f"Curvas Médias — BLANK + Diluição — {total_devices_selecionados} devices",
+                                            'tipo': 'blank+concs', 'blanks': _etapas_bk_h, 'curvas': _etapas_am_h
+                                        }
+
+                                    _arquivos_gerados = []
+                                    for _chave_h, _info_h in _graficos_auto.items():
+                                        _curvas_h = []
+                                        if _info_h['tipo'] == 'blank+concs':
+                                            if any(e in etapas_presentes for e in _info_h['blanks']):
+                                                _dfbk = _mb(_info_h['blanks'])
+                                                _curvas_h.append({
+                                                    'id': '__blank__', 'label': 'BLANK',
+                                                    'color': _to_hex(plotter.cores_etapas.get('b_avg', '#FF1493')),
+                                                    'linestyle': 'dash', 'linewidth': 2.5,
+                                                    'x': _dfbk['V_G'].tolist(), 'y': _dfbk['I_DS'].tolist()
+                                                })
+                                            for _e in _info_h['curvas']:
+                                                if _e not in etapas_presentes:
+                                                    continue
+                                                _dfe = _mv(_e)
+                                                _ce = _to_hex(plotter.cores_etapas.get(
+                                                    _e, plotter.cores_concentracoes.get(_e, '#000000')))
+                                                _curvas_h.append({
+                                                    'id': _e, 'label': _labels_h.get(_e, _e),
+                                                    'color': _ce, 'linestyle': 'solid', 'linewidth': 2.2,
+                                                    'x': _dfe['V_G'].tolist(), 'y': _dfe['I_DS'].tolist()
+                                                })
+                                        else:
+                                            for _e in _info_h['curvas']:
+                                                if _e not in etapas_presentes:
+                                                    continue
+                                                _dfe = _mv(_e)
+                                                _ce = _to_hex(plotter.cores_etapas.get(_e, '#000000'))
+                                                _curvas_h.append({
+                                                    'id': _e, 'label': _labels_h.get(_e, _e),
+                                                    'color': _ce, 'linestyle': 'solid', 'linewidth': 2.2,
+                                                    'x': _dfe['V_G'].tolist(), 'y': _dfe['I_DS'].tolist()
+                                                })
+
+                                        if _curvas_h:
+                                            _html_out = _gerar_html_customizavel(_curvas_h, _info_h['titulo'])
+                                            _fname = f"{data_selecionada_analise}_{_chave_h}.html"
+                                            _fpath = _pasta_exp / _fname
+                                            _fpath.write_text(_html_out, encoding='utf-8')
+                                            _arquivos_gerados.append(str(_fpath))
+
+                                    # V_Dirac HTML
+                                    if _df_vd_html is not None and _stats_vd_html is not None:
+                                        import numpy as _np_vd2
+                                        import matplotlib.colors as _mc_vd2
+                                        _etapas_vd2 = [e for e in ['bare','etoh','ddt','pbse','apt','eta']
+                                                       if e in _stats_vd_html]
+                                        _rbow = ['#8B008B','#0000FF','#00FFFF','#00FF00','#FFFF00','#FFA500','#FF0000']
+                                        if len(_etapas_vd2) > 1:
+                                            _idxs2 = _np_vd2.linspace(0, len(_rbow)-1, len(_etapas_vd2))
+                                            _cores_vd2 = []
+                                            for _ix2 in _idxs2:
+                                                _ia2, _ib2 = int(_ix2), min(int(_ix2)+1, len(_rbow)-1)
+                                                _f2 = _ix2 - _ia2
+                                                _ca2 = _mc_vd2.to_rgb(_rbow[_ia2])
+                                                _cb2 = _mc_vd2.to_rgb(_rbow[_ib2])
+                                                _cores_vd2.append('#%02x%02x%02x' % tuple(
+                                                    int((_ca2[i]+_f2*(_cb2[i]-_ca2[i]))*255) for i in range(3)))
+                                        else:
+                                            _cores_vd2 = [_rbow[0]]
+                                        _etapas_data_vd = [
+                                            {'id':_e, 'label':plotter.labels_etapas.get(_e,_e),
+                                             'color':_cores_vd2[_i],
+                                             'media':float(_stats_vd_html[_e]['media']),
+                                             'sem':  float(_stats_vd_html[_e]['sem'])}
+                                            for _i,_e in enumerate(_etapas_vd2)
+                                        ]
+                                        _chips_data_vd = []
+                                        for _chip2 in _df_vd_html['chip'].unique():
+                                            _dfc2 = _df_vd_html[_df_vd_html['chip']==_chip2]
+                                            _chips_data_vd.append({'name':_chip2, 'valores':[
+                                                float(_dfc2[_dfc2['etapa']==_e]['vdirac'].mean())
+                                                if not _dfc2[_dfc2['etapa']==_e].empty else None
+                                                for _e in _etapas_vd2
+                                            ]})
+                                        _titulo_vd2 = f"V_Dirac — Charge Neutrality Point — {total_devices_selecionados} devices"
+                                        _html_vd2 = _gerar_html_vdirac(_etapas_data_vd, _chips_data_vd, _titulo_vd2)
+                                        _fpath_vd2 = _pasta_exp / f"{data_selecionada_analise}_vdirac.html"
+                                        _fpath_vd2.write_text(_html_vd2, encoding='utf-8')
+                                        _arquivos_gerados.append(str(_fpath_vd2))
+
+                                    if _arquivos_gerados:
+                                        st.success(f"✅ {len(_arquivos_gerados)} HTML(s) salvo(s) em `{_pasta_exp}`")
+                                        for _fp in _arquivos_gerados:
+                                            st.caption(f"📄 {_fp}")
+                                    else:
+                                        st.info("ℹ️ Nenhum gráfico HTML gerado (dados insuficientes)")
+
+                                except Exception as e:
+                                    st.error(f"❌ Erro ao gerar HTMLs: {e}")
+                                    import traceback
+                                    st.error(traceback.format_exc())
+
                         except Exception as e:
                             st.error(f"❌ Erro ao gerar análise consolidada: {e}")
                             import traceback
                             st.error(traceback.format_exc())
-                
-                # --- Download HTML persistente (fora do if btn_gerar_consolidado) ---
-                if '_html_exportar' in st.session_state:
-                    st.markdown("---")
-                    nome_graf = st.session_state.get('_html_exportar_nome', 'gráfico')
-                    st.info(f"📄 HTML pronto: **{nome_graf}**")
-                    st.download_button(
-                        "📥 Baixar HTML interativo",
-                        data=st.session_state['_html_exportar'],
-                        file_name="grafico_personalizado.html",
-                        mime="text/html",
-                        key="download_html_persistente",
-                        use_container_width=True
-                    )
 
 # ==================== RODAPÉ ====================
 st.markdown("---")
