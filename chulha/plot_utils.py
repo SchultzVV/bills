@@ -552,6 +552,299 @@ class PlotterGFET:
         """
         fig.savefig(caminho, dpi=dpi, bbox_inches='tight')
         print(f"✅ Figura salva: {caminho}")
+    
+    @staticmethod
+    def calcular_vdirac_device(df_etapa: pd.DataFrame, device: str) -> Optional[float]:
+        """
+        Calcula o V_dirac (charge neutrality point) para um device
+        V_dirac é o ponto de mínima corrente (I_DS mínimo)
+        
+        Args:
+            df_etapa: DataFrame com as colunas 'V_G' e device
+            device: Nome da coluna do device
+            
+        Returns:
+            Valor de V_G correspondente ao V_dirac, ou None se não puder calcular
+        """
+        if device not in df_etapa.columns or 'V_G' not in df_etapa.columns:
+            return None
+        
+        # Pegar dados válidos (sem NaN)
+        df_clean = df_etapa[['V_G', device]].dropna()
+        
+        if len(df_clean) < 2:
+            return None
+        
+        # Encontrar índice do mínimo (em escala linear)
+        try:
+            idx_min = df_clean[device].idxmin()
+            vdirac = df_clean.loc[idx_min, 'V_G']
+            
+            if pd.isna(vdirac):
+                return None
+            
+            return float(vdirac)
+        except:
+            return None
+    
+    @staticmethod
+    def processar_vdirac_multiplos_chips(
+        df_consolidado: pd.DataFrame,
+        etapas_ordem: Optional[List[str]] = None,
+        devices_por_chip: Optional[Dict[str, List[str]]] = None
+    ) -> Tuple[pd.DataFrame, Dict]:
+        """
+        Processa V_dirac para múltiplos chips e devices a partir de DataFrame consolidado
+        
+        Args:
+            df_consolidado: DataFrame com colunas [chip, etapa, V_G, device, I_DS]
+            etapas_ordem: Ordem das etapas (default: bare, etoh, ddt, pbse, apt, eta)
+            devices_por_chip: Dict com {chip: [lista de devices]}. Se None, usa todos
+            
+        Returns:
+            Tupla (df_vdirac, stats_dict) onde:
+            - df_vdirac: DataFrame com V_dirac para cada chip/etapa
+            - stats_dict: Dicionário com estatísticas (média, sem) para cada etapa
+        """
+        if etapas_ordem is None:
+            etapas_ordem = ['bare', 'etoh', 'ddt', 'pbse', 'apt', 'eta']
+        
+        # Filtrar apenas etapas disponíveis
+        etapas_ordem = [e for e in etapas_ordem if e in df_consolidado['etapa'].unique()]
+        
+        # Preparar dados por etapa
+        registros_vdirac = []
+        
+        chips_unicos = df_consolidado['chip'].unique().tolist()
+        
+        for chip in chips_unicos:
+            df_chip = df_consolidado[df_consolidado['chip'] == chip]
+            
+            # Determinar devices para este chip
+            if devices_por_chip and chip in devices_por_chip:
+                devices_selecionados = devices_por_chip[chip]
+            else:
+                devices_selecionados = df_chip['device'].unique().tolist()
+            
+            for etapa in etapas_ordem:
+                df_etapa = df_chip[df_chip['etapa'] == etapa]
+                
+                if df_etapa.empty:
+                    continue
+                
+                # Reconstrói formato de colunas [V_G, device1, device2, ...]
+                df_pivot = df_etapa.pivot_table(
+                    index='V_G',
+                    columns='device',
+                    values='I_DS',
+                    aggfunc='mean'
+                ).reset_index()
+                
+                # Calcular V_dirac para cada device selecionado
+                for device in devices_selecionados:
+                    if device not in df_pivot.columns:
+                        continue
+                    
+                    vdirac = PlotterGFET.calcular_vdirac_device(df_pivot, device)
+                    
+                    if vdirac is not None:
+                        registros_vdirac.append({
+                            'chip': chip,
+                            'device': device,
+                            'etapa': etapa,
+                            'vdirac': vdirac
+                        })
+        
+        if not registros_vdirac:
+            return pd.DataFrame(), {}
+        
+        df_vdirac = pd.DataFrame(registros_vdirac)
+        
+        # Calcular estatísticas por etapa (média e SEM)
+        stats = {}
+        for etapa in etapas_ordem:
+            df_etapa_stats = df_vdirac[df_vdirac['etapa'] == etapa]
+            
+            if not df_etapa_stats.empty:
+                vdirac_values = df_etapa_stats['vdirac'].values
+                media = np.mean(vdirac_values)
+                sem = np.std(vdirac_values) / np.sqrt(len(vdirac_values)) if len(vdirac_values) > 1 else 0
+                
+                stats[etapa] = {
+                    'media': media,
+                    'sem': sem,
+                    'n_valores': len(vdirac_values),
+                    'min': np.min(vdirac_values),
+                    'max': np.max(vdirac_values)
+                }
+        
+        return df_vdirac, stats
+    
+    def plot_vdirac_evolucao(
+        self,
+        df_vdirac: pd.DataFrame,
+        stats: Dict,
+        etapas_ordem: Optional[List[str]] = None,
+        figsize: Tuple[int, int] = (12, 7),
+        titulo: str = "Evolução do V$_{Dirac}$ durante Funcionalização"
+    ) -> plt.Figure:
+        """
+        Plota a evolução de V_dirac através das etapas de funcionalização
+        
+        Args:
+            df_vdirac: DataFrame com V_dirac para cada chip/device/etapa
+            stats: Dicionário com estatísticas (média, sem) por etapa
+            etapas_ordem: Ordem das etapas a plotar
+            figsize: Tamanho da figura
+            titulo: Título do gráfico
+            
+        Returns:
+            Figure do matplotlib
+        """
+        if etapas_ordem is None:
+            etapas_ordem = ['bare', 'etoh', 'ddt', 'pbse', 'apt', 'eta']
+        
+        # Filtrar apenas etapas com dados
+        etapas_ordem = [e for e in etapas_ordem if e in stats]
+        
+        if not etapas_ordem:
+            raise ValueError("Nenhuma etapa com dados disponível para plotagem")
+        
+        # Cores arco-íris personalizadas
+        cores_rainbow = [
+            '#8B008B',  # Roxo escuro
+            '#0000FF',  # Azul
+            '#00FFFF',  # Ciano
+            '#00FF00',  # Verde
+            '#FFFF00',  # Amarelo
+            '#FFA500',  # Laranja
+            '#FF0000'   # Vermelho
+        ]
+        
+        # Interpolar cores para número de etapas
+        if len(etapas_ordem) > 1:
+            cores_etapas_idx = np.linspace(0, len(cores_rainbow) - 1, len(etapas_ordem))
+            cores_etapas = []
+            for idx in cores_etapas_idx:
+                idx_inf = int(idx)
+                idx_sup = min(idx_inf + 1, len(cores_rainbow) - 1)
+                frac = idx - idx_inf
+                
+                cor_inf = plt.matplotlib.colors.to_rgb(cores_rainbow[idx_inf])
+                cor_sup = plt.matplotlib.colors.to_rgb(cores_rainbow[idx_sup])
+                
+                cor_interpolada = [
+                    cor_inf[i] + frac * (cor_sup[i] - cor_inf[i])
+                    for i in range(3)
+                ]
+                cores_etapas.append(cor_interpolada)
+        else:
+            cores_etapas = [cores_rainbow[0]]
+        
+        # Criar figura
+        fig, ax = plt.subplots(figsize=figsize, facecolor='white')
+        
+        # X positions para as etapas
+        x_positions = np.arange(len(etapas_ordem))
+        
+        # Plotar pontos individuais (levemente transparentes)
+        for chip in df_vdirac['chip'].unique():
+            df_chip = df_vdirac[df_vdirac['chip'] == chip]
+            
+            vdirac_por_etapa = []
+            for etapa in etapas_ordem:
+                df_etapa = df_chip[df_chip['etapa'] == etapa]
+                if not df_etapa.empty:
+                    vdirac_medio = df_etapa['vdirac'].mean()
+                    vdirac_por_etapa.append(vdirac_medio)
+                else:
+                    vdirac_por_etapa.append(np.nan)
+            
+            ax.plot(x_positions, vdirac_por_etapa, 'o-', alpha=0.3, color='grey', 
+                   linewidth=1, markersize=4, label=None)
+        
+        # Plotar média com barras de erro
+        medias = []
+        sems = []
+        for etapa in etapas_ordem:
+            if etapa in stats:
+                medias.append(stats[etapa]['media'])
+                sems.append(stats[etapa]['sem'])
+            else:
+                medias.append(np.nan)
+                sems.append(0)
+        
+        # Plotar barras de erro e pontos
+        for i, (etapa, media, sem, cor) in enumerate(zip(etapas_ordem, medias, sems, cores_etapas)):
+            # Barra de erro
+            ax.errorbar(i, media, yerr=sem, fmt='o', markersize=14, 
+                       color=cor, ecolor=cor, elinewidth=2.5, capsize=5, 
+                       capthick=2.5, label=self.labels_etapas.get(etapa, etapa),
+                       zorder=10)
+            
+            # Adicionar valor de N (número de valores)
+            if etapa in stats:
+                n = stats[etapa]['n_valores']
+                ax.text(i, media - sem - 0.05, f'n={n}', ha='center', va='top', 
+                       fontsize=9, color='grey')
+        
+        # Conectar pontos com linha
+        ax.plot(x_positions, medias, '-', color='black', linewidth=1.5, 
+               alpha=0.5, zorder=1)
+        
+        # Configurar eixos
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels([self.labels_etapas.get(e, e) for e in etapas_ordem], 
+                           fontsize=12, fontweight='bold')
+        ax.set_ylabel('V$_{Dirac}$ (V)', fontsize=12, fontweight='bold')
+        ax.set_title(titulo, fontsize=14, fontweight='bold', pad=20)
+        
+        # Grid
+        ax.grid(True, axis='y', linestyle='--', alpha=0.3, zorder=0)
+        ax.set_axisbelow(True)
+        
+        # Legenda
+        ax.legend(fontsize=11, loc='center left', bbox_to_anchor=(1.02, 0.5), 
+                 frameon=True, framealpha=0.95, edgecolor='grey')
+        
+        plt.tight_layout()
+        return fig
+    
+    @staticmethod
+    def agrupar_chips_por_vdirac(df_vdirac: pd.DataFrame, stats: Dict) -> Dict[str, List[str]]:
+        """
+        Agrupa chips por similaridade de V_dirac na etapa BARE
+        Facilita análise de chips com comportamentos similares
+        
+        Args:
+            df_vdirac: DataFrame com V_dirac para cada chip/device/etapa
+            stats: Dicionário com estatísticas por etapa
+            
+        Returns:
+            Dicionário com grupos de chips similares
+        """
+        # Calcular V_dirac médio para cada chip na etapa BARE
+        if 'bare' not in df_vdirac['etapa'].unique():
+            return {'Todos': df_vdirac['chip'].unique().tolist()}
+        
+        df_bare = df_vdirac[df_vdirac['etapa'] == 'bare']
+        vdirac_por_chip = df_bare.groupby('chip')['vdirac'].mean().sort_values()
+        
+        if len(vdirac_por_chip) <= 1:
+            return {'Todos': vdirac_por_chip.index.tolist()}
+        
+        # Agrupar em 3 grupos: baixo, médio, alto
+        grupos = {}
+        tercis = np.percentile(vdirac_por_chip.values, [33, 67])
+        
+        grupos['Baixo V_D'] = vdirac_por_chip[vdirac_por_chip <= tercis[0]].index.tolist()
+        grupos['Médio V_D'] = vdirac_por_chip[(vdirac_por_chip > tercis[0]) & (vdirac_por_chip <= tercis[1])].index.tolist()
+        grupos['Alto V_D'] = vdirac_por_chip[vdirac_por_chip > tercis[1]].index.tolist()
+        
+        # Remover grupos vazios
+        grupos = {k: v for k, v in grupos.items() if v}
+        
+        return grupos
 
 
 # Exemplo de uso
