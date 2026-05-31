@@ -6,6 +6,7 @@ import matplotlib.ticker as mticker
 import os
 import glob
 import io
+import plotly.graph_objects as go
 
 # Importar módulos locais
 from dataprep import DataLoader
@@ -1311,11 +1312,586 @@ with tab6:
                                             st.info("ℹ️ Agrupamento não disponível para estes dados")
                                 except Exception as e:
                                     st.error(f"❌ Erro ao processar V_Dirac: {e}")
+                                
+                                # ---- Curvas médias por etapa ----
+                                st.markdown("---")
+                                st.markdown("#### 📉 Curvas Médias por Etapa")
+                                st.markdown("Média de I$_{DS}$ sobre todos os devices selecionados, para cada etapa")
+                                
+                                try:
+                                    etapas_ordem_cm = ['bare', 'etoh', 'ddt', 'pbse', 'apt', 'eta']
+                                    etapas_presentes_cm = [e for e in etapas_ordem_cm if e in df_filtrado['etapa'].values]
+                                    
+                                    if not etapas_presentes_cm:
+                                        st.warning("⚠️ Nenhuma etapa disponível para plotar curvas médias")
+                                    else:
+                                        df_media_cm = (
+                                            df_filtrado[df_filtrado['etapa'].isin(etapas_presentes_cm)]
+                                            .groupby(['etapa', 'V_G'], sort=False)['I_DS']
+                                            .mean()
+                                            .reset_index()
+                                        )
+                                        
+                                        fig_cm, ax_cm = plt.subplots(figsize=(12, 7), facecolor='white')
+                                        
+                                        for etapa_cm in etapas_presentes_cm:
+                                            df_et_cm = df_media_cm[df_media_cm['etapa'] == etapa_cm].sort_values('V_G')
+                                            cor_cm = plotter.cores_etapas.get(etapa_cm, 'black')
+                                            label_cm = plotter.labels_etapas.get(etapa_cm, etapa_cm)
+                                            ax_cm.plot(df_et_cm['V_G'], df_et_cm['I_DS'],
+                                                       linewidth=2.2, label=label_cm, color=cor_cm)
+                                        
+                                        ax_cm.set_xlabel("V$_{GS}$ (V)", fontsize=13)
+                                        ax_cm.set_ylabel("I$_{DS}$ Médio (A)", fontsize=13)
+                                        ax_cm.set_yscale("log")
+                                        ax_cm.set_title(
+                                            f"Curvas Médias por Etapa — {total_devices_selecionados} device(s) selecionado(s)",
+                                            fontsize=14, fontweight='bold'
+                                        )
+                                        ax_cm.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.5)
+                                        ax_cm.legend(fontsize=11, loc='best', frameon=False)
+                                        plt.tight_layout()
+                                        
+                                        st.pyplot(fig_cm)
+                                        
+                                        buf_cm = io.BytesIO()
+                                        fig_cm.savefig(buf_cm, format="png", dpi=300,
+                                                       facecolor="white", bbox_inches="tight", pad_inches=0.5)
+                                        buf_cm.seek(0)
+                                        st.download_button(
+                                            "📥 Baixar Curvas Médias (PNG)",
+                                            data=buf_cm,
+                                            file_name=f"curvas_medias_{data_selecionada_analise}.png",
+                                            mime="image/png",
+                                            key="download_curvas_medias_png"
+                                        )
+                                        plt.close(fig_cm)
+                                except Exception as e:
+                                    st.error(f"❌ Erro ao gerar curvas médias: {e}")
+                                
+                                # ---- Curvas médias: BLANKs + concentrações ng/mL ----
+                                st.markdown("---")
+                                st.markdown("#### 🧪 Curvas Médias — BLANK + Concentrações (ng/mL)")
+                                st.markdown("b1, b2 e b3 são combinados em uma única curva **BLANK**; demais etapas plotadas individualmente")
+                                
+                                try:
+                                    etapas_blanks = ['b1', 'b2', 'b3']
+                                    etapas_concs  = ['c10ng', 'c25ng', 'c50ng', 'c75ng', 'c100ng']
+                                    
+                                    etapas_blanks_presentes = [e for e in etapas_blanks if e in df_filtrado['etapa'].values]
+                                    etapas_concs_presentes  = [e for e in etapas_concs  if e in df_filtrado['etapa'].values]
+                                    
+                                    if not etapas_blanks_presentes and not etapas_concs_presentes:
+                                        st.warning("⚠️ Nenhuma etapa de BLANK ou concentração disponível nos dados selecionados")
+                                    else:
+                                        fig_ng, ax_ng = plt.subplots(figsize=(12, 7), facecolor='white')
+                                        
+                                        # Curva BLANK: média de b1+b2+b3 juntos por V_G
+                                        if etapas_blanks_presentes:
+                                            df_blanks = (
+                                                df_filtrado[df_filtrado['etapa'].isin(etapas_blanks_presentes)]
+                                                .groupby('V_G', sort=False)['I_DS']
+                                                .mean()
+                                                .reset_index()
+                                                .sort_values('V_G')
+                                            )
+                                            cor_blank = plotter.cores_etapas.get('b_avg', '#FF1493')
+                                            ax_ng.plot(df_blanks['V_G'], df_blanks['I_DS'],
+                                                       linewidth=2.5, label='BLANK', color=cor_blank,
+                                                       linestyle='--')
+                                        
+                                        # Curvas de concentração: média por V_G para cada etapa
+                                        for etapa_ng in etapas_concs_presentes:
+                                            df_et_ng = (
+                                                df_filtrado[df_filtrado['etapa'] == etapa_ng]
+                                                .groupby('V_G', sort=False)['I_DS']
+                                                .mean()
+                                                .reset_index()
+                                                .sort_values('V_G')
+                                            )
+                                            cor_ng    = plotter.cores_etapas.get(etapa_ng, 'black')
+                                            label_ng  = plotter.labels_etapas.get(etapa_ng, etapa_ng)
+                                            ax_ng.plot(df_et_ng['V_G'], df_et_ng['I_DS'],
+                                                       linewidth=2.2, label=label_ng, color=cor_ng)
+                                        
+                                        ax_ng.set_xlabel("V$_{GS}$ (V)", fontsize=13)
+                                        ax_ng.set_ylabel("I$_{DS}$ Médio (A)", fontsize=13)
+                                        ax_ng.set_yscale("log")
+                                        ax_ng.set_title(
+                                            f"Curvas Médias — BLANK + Concentrações — {total_devices_selecionados} device(s)",
+                                            fontsize=14, fontweight='bold'
+                                        )
+                                        ax_ng.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.5)
+                                        ax_ng.legend(fontsize=11, loc='best', frameon=False)
+                                        plt.tight_layout()
+                                        
+                                        st.pyplot(fig_ng)
+                                        
+                                        buf_ng = io.BytesIO()
+                                        fig_ng.savefig(buf_ng, format="png", dpi=300,
+                                                       facecolor="white", bbox_inches="tight", pad_inches=0.5)
+                                        buf_ng.seek(0)
+                                        st.download_button(
+                                            "📥 Baixar Curvas ng/mL (PNG)",
+                                            data=buf_ng,
+                                            file_name=f"curvas_ng_{data_selecionada_analise}.png",
+                                            mime="image/png",
+                                            key="download_curvas_ng_png"
+                                        )
+                                        plt.close(fig_ng)
+                                except Exception as e:
+                                    st.error(f"❌ Erro ao gerar curvas ng/mL: {e}")
+                                
+                                # ---- Curvas médias: BLANKs + série aM/fM/pM ----
+                                st.markdown("---")
+                                st.markdown("#### ⚗️ Curvas Médias — BLANK + Série de Diluição (aM → pM)")
+                                st.markdown("b1, b2 e b3 são combinados em uma única curva **BLANK**; concentrações plotadas individualmente")
+                                
+                                try:
+                                    etapas_blanks_m = ['b1', 'b2', 'b3']
+                                    etapas_menos    = ['menos18', 'menos17', 'menos16',
+                                                       'menos15', 'menos14', 'menos13',
+                                                       'menos12', 'menos11', 'menos10']
+                                    
+                                    labels_menos = {
+                                        'menos18': '1 aM',
+                                        'menos17': '10 aM',
+                                        'menos16': '100 aM',
+                                        'menos15': '1 fM',
+                                        'menos14': '10 fM',
+                                        'menos13': '100 fM',
+                                        'menos12': '1 pM',
+                                        'menos11': '10 pM',
+                                        'menos10': '100 pM',
+                                    }
+                                    
+                                    etapas_blanks_m_presentes = [e for e in etapas_blanks_m if e in df_filtrado['etapa'].values]
+                                    etapas_menos_presentes    = [e for e in etapas_menos    if e in df_filtrado['etapa'].values]
+                                    
+                                    if not etapas_blanks_m_presentes and not etapas_menos_presentes:
+                                        st.warning("⚠️ Nenhuma etapa de BLANK ou diluição disponível nos dados selecionados")
+                                    else:
+                                        fig_m, ax_m = plt.subplots(figsize=(12, 7), facecolor='white')
+                                        
+                                        # Curva BLANK: média de b1+b2+b3 juntos por V_G
+                                        if etapas_blanks_m_presentes:
+                                            df_blanks_m = (
+                                                df_filtrado[df_filtrado['etapa'].isin(etapas_blanks_m_presentes)]
+                                                .groupby('V_G', sort=False)['I_DS']
+                                                .mean()
+                                                .reset_index()
+                                                .sort_values('V_G')
+                                            )
+                                            cor_blank_m = plotter.cores_etapas.get('b_avg', '#FF1493')
+                                            ax_m.plot(df_blanks_m['V_G'], df_blanks_m['I_DS'],
+                                                      linewidth=2.5, label='BLANK', color=cor_blank_m,
+                                                      linestyle='--')
+                                        
+                                        # Curvas de concentração por V_G
+                                        for etapa_m in etapas_menos_presentes:
+                                            df_et_m = (
+                                                df_filtrado[df_filtrado['etapa'] == etapa_m]
+                                                .groupby('V_G', sort=False)['I_DS']
+                                                .mean()
+                                                .reset_index()
+                                                .sort_values('V_G')
+                                            )
+                                            cor_m   = plotter.cores_concentracoes.get(etapa_m, 'black')
+                                            label_m = labels_menos.get(etapa_m, etapa_m)
+                                            ax_m.plot(df_et_m['V_G'], df_et_m['I_DS'],
+                                                      linewidth=2.2, label=label_m, color=cor_m)
+                                        
+                                        ax_m.set_xlabel("V$_{GS}$ (V)", fontsize=13)
+                                        ax_m.set_ylabel("I$_{DS}$ Médio (A)", fontsize=13)
+                                        ax_m.set_yscale("log")
+                                        ax_m.set_title(
+                                            f"Curvas Médias — BLANK + Diluição (aM→pM) — {total_devices_selecionados} device(s)",
+                                            fontsize=14, fontweight='bold'
+                                        )
+                                        ax_m.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.5)
+                                        ax_m.legend(fontsize=11, loc='best', frameon=False)
+                                        plt.tight_layout()
+                                        
+                                        st.pyplot(fig_m)
+                                        
+                                        buf_m = io.BytesIO()
+                                        fig_m.savefig(buf_m, format="png", dpi=300,
+                                                      facecolor="white", bbox_inches="tight", pad_inches=0.5)
+                                        buf_m.seek(0)
+                                        st.download_button(
+                                            "📥 Baixar Curvas Diluição (PNG)",
+                                            data=buf_m,
+                                            file_name=f"curvas_diluicao_{data_selecionada_analise}.png",
+                                            mime="image/png",
+                                            key="download_curvas_diluicao_png"
+                                        )
+                                        plt.close(fig_m)
+                                except Exception as e:
+                                    st.error(f"❌ Erro ao gerar curvas de diluição: {e}")
+                                
+                                # ---- Metadados da sessão de análise ----
+                                st.markdown("---")
+                                st.markdown("#### 🗂️ Metadados da Análise")
+                                
+                                # --- Chips e devices selecionados ---
+                                meta_chips = []
+                                for chip_m in chips_selecionados_analise:
+                                    key_dev_m = f"selecionados_{chip_m}"
+                                    devs_m = sorted(
+                                        list(st.session_state.get(key_dev_m, set())),
+                                        key=lambda x: int(x) if str(x).isdigit() else float('inf')
+                                    )
+                                    n_total_m = len(df_consolidado_analise[
+                                        df_consolidado_analise['chip'] == chip_m
+                                    ]['device'].unique())
+                                    meta_chips.append({
+                                        'Chip': chip_m,
+                                        'Devices selecionados': ', '.join(devs_m) if devs_m else '—',
+                                        'N selecionados': len(devs_m),
+                                        'N total': n_total_m,
+                                    })
+                                
+                                st.markdown("**Chips e devices incluídos na análise:**")
+                                st.dataframe(pd.DataFrame(meta_chips), use_container_width=True, hide_index=True)
+                                
+                                # --- Etapas por gráfico ---
+                                etapas_ordem_ref   = ['bare', 'etoh', 'ddt', 'pbse', 'apt', 'eta']
+                                etapas_blanks_ref  = ['b1', 'b2', 'b3']
+                                etapas_ng_ref      = ['c10ng', 'c25ng', 'c50ng', 'c75ng', 'c100ng']
+                                etapas_menos_ref   = ['menos18', 'menos17', 'menos16',
+                                                      'menos15', 'menos14', 'menos13',
+                                                      'menos12', 'menos11', 'menos10']
+                                labels_meta = {
+                                    'bare': 'BARE', 'etoh': 'ETOH', 'ddt': 'DDT',
+                                    'pbse': 'PBSE', 'apt': 'APT', 'eta': 'ETA',
+                                    'b1': 'BLANK1', 'b2': 'BLANK2', 'b3': 'BLANK3',
+                                    'c10ng': '10 ng/mL', 'c25ng': '25 ng/mL',
+                                    'c50ng': '50 ng/mL', 'c75ng': '75 ng/mL', 'c100ng': '100 ng/mL',
+                                    'menos18': '1 aM', 'menos17': '10 aM', 'menos16': '100 aM',
+                                    'menos15': '1 fM', 'menos14': '10 fM', 'menos13': '100 fM',
+                                    'menos12': '1 pM', 'menos11': '10 pM', 'menos10': '100 pM',
+                                }
+                                
+                                etapas_presentes = set(df_filtrado['etapa'].unique())
+                                
+                                def fmt_etapas(lista):
+                                    presentes = [e for e in lista if e in etapas_presentes]
+                                    return ', '.join(labels_meta.get(e, e) for e in presentes) if presentes else '(nenhuma)'
+                                
+                                meta_graficos = [
+                                    {
+                                        'Gráfico': 'V_Dirac — evolução por etapa',
+                                        'Etapas usadas': fmt_etapas(etapas_ordem_ref),
+                                        'Critério da média': 'Média do V_Dirac (mínimo de I_DS) por device; barra de erro = SEM entre devices',
+                                    },
+                                    {
+                                        'Gráfico': 'Curvas médias — bare/etoh/ddt/pbse/apt/eta',
+                                        'Etapas usadas': fmt_etapas(etapas_ordem_ref),
+                                        'Critério da média': 'Média de I_DS agrupada por (etapa, V_G) sobre todos os devices selecionados',
+                                    },
+                                    {
+                                        'Gráfico': 'Curvas médias — BLANK + concentrações ng/mL',
+                                        'Etapas usadas': f"BLANK ← {fmt_etapas(etapas_blanks_ref)} (média conjunta); {fmt_etapas(etapas_ng_ref)}",
+                                        'Critério da média': 'BLANK: média de I_DS de b1+b2+b3 juntos por V_G; demais: média por (etapa, V_G)',
+                                    },
+                                    {
+                                        'Gráfico': 'Curvas médias — BLANK + série diluição (aM→pM)',
+                                        'Etapas usadas': f"BLANK ← {fmt_etapas(etapas_blanks_ref)} (média conjunta); {fmt_etapas(etapas_menos_ref)}",
+                                        'Critério da média': 'BLANK: média de I_DS de b1+b2+b3 juntos por V_G; demais: média por (etapa, V_G)',
+                                    },
+                                ]
+                                
+                                st.markdown("**Critério de média e etapas por gráfico:**")
+                                st.dataframe(pd.DataFrame(meta_graficos), use_container_width=True, hide_index=True)
+                                
+                                # --- Resumo numérico geral ---
+                                n_chips_meta   = len(chips_selecionados_analise)
+                                n_devs_meta    = total_devices_selecionados
+                                n_pontos_meta  = len(df_filtrado)
+                                etapas_meta    = sorted(etapas_presentes)
+                                
+                                col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                                col_m1.metric("Chips", n_chips_meta)
+                                col_m2.metric("Devices", n_devs_meta)
+                                col_m3.metric("Etapas presentes", len(etapas_meta))
+                                col_m4.metric("Pontos totais", f"{n_pontos_meta:,}")
+                                
+                                with st.expander("📋 Lista completa de etapas presentes nos dados"):
+                                    st.write(', '.join(labels_meta.get(e, e) for e in etapas_meta))
+                                
+                                # ---- Personalização via HTML auto-suficiente ----
+                                st.markdown("---")
+                                st.markdown("#### 🎨 Exportar Gráfico Interativo (HTML)")
+                                st.markdown("Escolha o gráfico, clique em **Gerar HTML** e abra o arquivo para personalizar cores, estilos, labels e título — tudo no navegador, sem recarregar nada")
+                                
+                                import matplotlib.colors as _mcolors
+                                import json as _json
+                                
+                                def _to_hex(c):
+                                    try:
+                                        return _mcolors.to_hex(_mcolors.to_rgba(c))
+                                    except Exception:
+                                        return '#000000'
+                                
+                                def _gerar_html_customizavel(curvas_data, titulo_default):
+                                    """
+                                    curvas_data: lista de dicts
+                                        { id, label, color (hex), linestyle (plotly), linewidth, x: [], y: [] }
+                                    Retorna string HTML auto-suficiente com painel de edição + Plotly.
+                                    """
+                                    data_js  = _json.dumps(curvas_data, ensure_ascii=False)
+                                    titulo_js = _json.dumps(titulo_default, ensure_ascii=False)
+                                    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Gráfico GFET — Personalização</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Segoe UI',Arial,sans-serif;background:#f4f4f4;display:flex;height:100vh;overflow:hidden}}
+#sidebar{{width:310px;min-width:260px;background:#fff;border-right:1px solid #dde;overflow-y:auto;
+          padding:14px 12px;display:flex;flex-direction:column;gap:10px}}
+#main{{flex:1;display:flex;flex-direction:column;padding:10px;gap:8px;min-width:0}}
+h3{{font-size:13px;font-weight:700;color:#333;border-bottom:1px solid #eee;padding-bottom:5px;margin-bottom:2px}}
+.block{{background:#f8f8fb;border:1px solid #e0e4ee;border-radius:6px;padding:9px 10px}}
+.bname{{font-weight:600;font-size:12px;color:#333;margin-bottom:6px}}
+label{{font-size:11px;color:#555;display:block;margin-bottom:2px;margin-top:5px}}
+input[type=text],select{{width:100%;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px}}
+input[type=color]{{width:44px;height:26px;border:none;border-radius:4px;padding:1px;cursor:pointer}}
+.row{{display:flex;gap:7px;align-items:flex-end}}
+.row>div{{flex:1}}
+#titulo-input{{width:100%;padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:4px}}
+.btn{{padding:8px 12px;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:600}}
+#btn-apply{{background:#1976d2;color:#fff;width:100%}}
+#btn-apply:hover{{background:#1255a0}}
+#btn-png{{background:#388e3c;color:#fff}}
+#btn-png:hover{{background:#276228}}
+.toolbar{{display:flex;gap:8px;flex-wrap:wrap}}
+#chart{{flex:1;min-height:0}}
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <h3>⚙️ Personalizar</h3>
+  <div>
+    <label>Título</label>
+    <input type="text" id="titulo-input">
+  </div>
+  <div id="curves-panel"></div>
+  <button class="btn" id="btn-apply" onclick="aplicar()">▶ Aplicar</button>
+</div>
+<div id="main">
+  <div class="toolbar">
+    <button class="btn" id="btn-png" onclick="baixarPNG()">📥 Baixar PNG</button>
+  </div>
+  <div id="chart"></div>
+</div>
+<script>
+const DADOS = {data_js};
+const TITULO_DEFAULT = {titulo_js};
+document.getElementById('titulo-input').value = TITULO_DEFAULT;
+
+function buildPanel(){{
+  const p = document.getElementById('curves-panel');
+  p.innerHTML = '';
+  DADOS.forEach((c,i)=>{{
+    const d = document.createElement('div');
+    d.className = 'block';
+    d.innerHTML = `
+      <div class="bname">${{c.label}}</div>
+      <div><label>Label</label>
+        <input type="text" id="lbl-${{i}}" value="${{c.label}}">
+      </div>
+      <div class="row" style="margin-top:4px">
+        <div><label>Cor</label><br>
+          <input type="color" id="cor-${{i}}" value="${{c.color}}">
+        </div>
+        <div><label>Estilo</label>
+          <select id="est-${{i}}">
+            <option value="solid"   ${{c.linestyle==='solid'   ?'selected':''}}>Sólida</option>
+            <option value="dash"    ${{c.linestyle==='dash'    ?'selected':''}}>Tracejada</option>
+            <option value="dashdot" ${{c.linestyle==='dashdot' ?'selected':''}}>Traço-ponto</option>
+            <option value="dot"     ${{c.linestyle==='dot'     ?'selected':''}}>Pontilhada</option>
+          </select>
+        </div>
+        <div style="max-width:58px"><label>Espessura</label>
+          <input type="text" id="lw-${{i}}" value="${{c.linewidth}}">
+        </div>
+      </div>`;
+    p.appendChild(d);
+  }});
+}}
+
+function aplicar(){{
+  const titulo = document.getElementById('titulo-input').value;
+  const traces = DADOS.map((c,i)=>{{
+    const lbl = document.getElementById(`lbl-${{i}}`).value;
+    const cor  = document.getElementById(`cor-${{i}}`).value;
+    const est  = document.getElementById(`est-${{i}}`).value;
+    const lw   = parseFloat(document.getElementById(`lw-${{i}}`).value)||2;
+    return {{x:c.x, y:c.y, mode:'lines', name:lbl,
+             line:{{color:cor, dash:est, width:lw}}}};
+  }});
+  const layout={{
+    title:{{text:titulo, font:{{size:16}}}},
+    xaxis:{{title:'V\u209A\u2091\u209C\u00a0(V)', showgrid:true, gridcolor:'#e0e0e0', zeroline:false}},
+    yaxis:{{title:'I_DS M\u00e9dio (A)', type:'log', showgrid:true, gridcolor:'#e0e0e0', zeroline:false}},
+    plot_bgcolor:'white', paper_bgcolor:'white',
+    font:{{size:13}}, legend:{{font:{{size:11}}}},
+    margin:{{l:75,r:25,t:60,b:60}}
+  }};
+  Plotly.react('chart', traces, layout, {{responsive:true}});
+}}
+
+function baixarPNG(){{
+  Plotly.downloadImage('chart',{{format:'png',width:1400,height:800,filename:'grafico_gfet'}});
+}}
+
+buildPanel();
+aplicar();
+</script>
+</body>
+</html>"""
+                                
+                                # --- Catálogo de gráficos ---
+                                _etapas_ord_h  = ['bare', 'etoh', 'ddt', 'pbse', 'apt', 'eta']
+                                _etapas_bk_h   = ['b1', 'b2', 'b3']
+                                _etapas_ng_h   = ['c10ng', 'c25ng', 'c50ng', 'c75ng', 'c100ng']
+                                _etapas_am_h   = ['menos18', 'menos17', 'menos16',
+                                                  'menos15', 'menos14', 'menos13',
+                                                  'menos12', 'menos11', 'menos10']
+                                _labels_h = {
+                                    'bare':'BARE','etoh':'ETOH','ddt':'DDT','pbse':'PBSE','apt':'APT','eta':'ETA',
+                                    'b1':'BLANK1','b2':'BLANK2','b3':'BLANK3',
+                                    'c10ng':'10 ng/mL','c25ng':'25 ng/mL','c50ng':'50 ng/mL',
+                                    'c75ng':'75 ng/mL','c100ng':'100 ng/mL',
+                                    'menos18':'1 aM','menos17':'10 aM','menos16':'100 aM',
+                                    'menos15':'1 fM','menos14':'10 fM','menos13':'100 fM',
+                                    'menos12':'1 pM','menos11':'10 pM','menos10':'100 pM',
+                                }
+                                
+                                _graficos_h = {}
+                                if any(e in etapas_presentes for e in _etapas_ord_h):
+                                    _graficos_h["Curvas médias — bare/etoh/ddt/pbse/apt/eta"] = {
+                                        'tipo':'simples','curvas':_etapas_ord_h,
+                                        'titulo': f"Curvas Médias por Etapa — {total_devices_selecionados} devices"
+                                    }
+                                if any(e in etapas_presentes for e in _etapas_bk_h + _etapas_ng_h):
+                                    _graficos_h["Curvas médias — BLANK + concentrações (ng/mL)"] = {
+                                        'tipo':'blank+concs','blanks':_etapas_bk_h,'curvas':_etapas_ng_h,
+                                        'titulo': f"Curvas Médias — BLANK + ng/mL — {total_devices_selecionados} devices"
+                                    }
+                                if any(e in etapas_presentes for e in _etapas_bk_h + _etapas_am_h):
+                                    _graficos_h["Curvas médias — BLANK + diluição (aM → pM)"] = {
+                                        'tipo':'blank+concs','blanks':_etapas_bk_h,'curvas':_etapas_am_h,
+                                        'titulo': f"Curvas Médias — BLANK + Diluição — {total_devices_selecionados} devices"
+                                    }
+                                
+                                if not _graficos_h:
+                                    st.warning("⚠️ Nenhum dado disponível para exportar")
+                                else:
+                                    _sel_h = st.selectbox(
+                                        "Gráfico para exportar:",
+                                        list(_graficos_h.keys()),
+                                        key="html_graf_sel"
+                                    )
+                                    
+                                    if st.button("🔄 Gerar HTML", key="btn_gerar_html", use_container_width=True):
+                                        try:
+                                            _info_h = _graficos_h[_sel_h]
+                                            
+                                            def _media_vg(etapa_k):
+                                                return (df_filtrado[df_filtrado['etapa'] == etapa_k]
+                                                        .groupby('V_G', sort=False)['I_DS'].mean()
+                                                        .reset_index().sort_values('V_G'))
+                                            
+                                            def _media_bks(blist):
+                                                pres = [e for e in blist if e in etapas_presentes]
+                                                return (df_filtrado[df_filtrado['etapa'].isin(pres)]
+                                                        .groupby('V_G', sort=False)['I_DS'].mean()
+                                                        .reset_index().sort_values('V_G'))
+                                            
+                                            _curvas_h = []
+                                            
+                                            if _info_h['tipo'] == 'blank+concs':
+                                                if any(e in etapas_presentes for e in _info_h['blanks']):
+                                                    df_bk = _media_bks(_info_h['blanks'])
+                                                    _curvas_h.append({
+                                                        'id': '__blank__', 'label': 'BLANK',
+                                                        'color': _to_hex(plotter.cores_etapas.get('b_avg','#FF1493')),
+                                                        'linestyle': 'dash', 'linewidth': 2.5,
+                                                        'x': df_bk['V_G'].tolist(),
+                                                        'y': df_bk['I_DS'].tolist()
+                                                    })
+                                                for _e in _info_h['curvas']:
+                                                    if _e not in etapas_presentes:
+                                                        continue
+                                                    df_e = _media_vg(_e)
+                                                    _cor_e = _to_hex(plotter.cores_etapas.get(
+                                                        _e, plotter.cores_concentracoes.get(_e, '#000000')))
+                                                    _curvas_h.append({
+                                                        'id': _e,
+                                                        'label': _labels_h.get(_e, _e),
+                                                        'color': _cor_e,
+                                                        'linestyle': 'solid', 'linewidth': 2.2,
+                                                        'x': df_e['V_G'].tolist(),
+                                                        'y': df_e['I_DS'].tolist()
+                                                    })
+                                            else:
+                                                for _e in _info_h['curvas']:
+                                                    if _e not in etapas_presentes:
+                                                        continue
+                                                    df_e = _media_vg(_e)
+                                                    _cor_e = _to_hex(plotter.cores_etapas.get(_e, '#000000'))
+                                                    _curvas_h.append({
+                                                        'id': _e,
+                                                        'label': _labels_h.get(_e, _e),
+                                                        'color': _cor_e,
+                                                        'linestyle': 'solid', 'linewidth': 2.2,
+                                                        'x': df_e['V_G'].tolist(),
+                                                        'y': df_e['I_DS'].tolist()
+                                                    })
+                                            
+                                            if not _curvas_h:
+                                                st.warning("⚠️ Nenhuma curva disponível para este gráfico")
+                                            else:
+                                                _html_out = _gerar_html_customizavel(_curvas_h, _info_h['titulo'])
+                                                st.session_state['_html_exportar'] = _html_out
+                                                st.session_state['_html_exportar_nome'] = _sel_h
+                                                # Salvar diretamente na pasta local
+                                                import pathlib as _pl, re as _re
+                                                _slug = _re.sub(r'[^a-zA-Z0-9_-]', '_', _sel_h)[:60]
+                                                _pasta_exp = _pl.Path(__file__).parent / "exports"
+                                                _pasta_exp.mkdir(exist_ok=True)
+                                                _caminho_html = _pasta_exp / f"{_slug}.html"
+                                                _caminho_html.write_text(_html_out, encoding='utf-8')
+                                                st.session_state['_html_exportar_caminho'] = str(_caminho_html)
+                                                st.success(f"✅ HTML salvo em `{_caminho_html}`  — e o botão de download aparece abaixo.")
+                                        
+                                        except Exception as e:
+                                            st.error(f"❌ Erro ao gerar HTML: {e}")
+                                            import traceback
+                                            st.error(traceback.format_exc())
                         
                         except Exception as e:
                             st.error(f"❌ Erro ao gerar análise consolidada: {e}")
                             import traceback
                             st.error(traceback.format_exc())
+                
+                # --- Download HTML persistente (fora do if btn_gerar_consolidado) ---
+                if '_html_exportar' in st.session_state:
+                    st.markdown("---")
+                    nome_graf = st.session_state.get('_html_exportar_nome', 'gráfico')
+                    st.info(f"📄 HTML pronto: **{nome_graf}**")
+                    st.download_button(
+                        "📥 Baixar HTML interativo",
+                        data=st.session_state['_html_exportar'],
+                        file_name="grafico_personalizado.html",
+                        mime="text/html",
+                        key="download_html_persistente",
+                        use_container_width=True
+                    )
 
 # ==================== RODAPÉ ====================
 st.markdown("---")
